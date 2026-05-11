@@ -558,7 +558,7 @@
 
   async function refreshData() {
     setLoading(true);
-    setStatus('Загружаем данные из ВК…');
+    setStatus('Загружаем данные из ВК и рекламного кабинета…');
     try {
       const r = await fetch('/api/refresh');
       const data = await r.json();
