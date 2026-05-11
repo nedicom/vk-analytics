@@ -172,10 +172,15 @@ def get_campaigns():
     if not token:
         return jsonify([])
     headers = {"Authorization": f"Bearer {token}"}
+    # Пробуем packages — это уровень кампаний над группами
+    packages = http.get("https://target.my.com/api/v2/packages.json",
+                        headers=headers, params={"limit": 250}).json()
+    if packages.get("items"):
+        return jsonify([{"id": p["id"], "name": p.get("name", f"id{p['id']}")} for p in packages["items"]])
+    # Fallback на campaigns
     data = http.get("https://target.my.com/api/v2/campaigns.json",
                     headers=headers, params={"limit": 250}).json()
-    campaigns = [{"id": c["id"], "name": c["name"]} for c in data.get("items", [])]
-    return jsonify(campaigns)
+    return jsonify([{"id": c["id"], "name": c["name"]} for c in data.get("items", [])])
 
 
 @app.route("/api/mapping/<video_id>", methods=["POST"])
