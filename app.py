@@ -115,7 +115,7 @@ def auth():
         f"https://oauth.vk.com/authorize"
         f"?client_id={VK_APP_ID}"
         f"&redirect_uri={VK_REDIRECT_URI}"
-        f"&scope=video,stats,ads,groups"
+        f"&scope=video,stats,groups"
         f"&response_type=code"
         f"&v=5.199"
     )
