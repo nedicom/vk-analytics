@@ -161,12 +161,15 @@ def ads_debug():
     banners_resp = http.get("https://target.my.com/api/v2/banners.json",
                             headers=headers, params={"limit": 1})
     banners_data = banners_resp.json()
-    first_id = banners_data.get("items", [{}])[0].get("id")
-    single = {}
-    if first_id:
-        single = http.get(f"https://target.my.com/api/v2/banners/{first_id}.json",
-                          headers=headers).json()
-    return jsonify({"token_ok": True, "single_banner": single})
+    first = banners_data.get("items", [{}])[0]
+    ad_group_id = first.get("ad_group_id")
+    campaign_id = first.get("campaign_id")
+    ad_group, campaign = {}, {}
+    if ad_group_id:
+        ad_group = http.get(f"https://target.my.com/api/v2/ad_groups/{ad_group_id}.json", headers=headers).json()
+    if campaign_id:
+        campaign = http.get(f"https://target.my.com/api/v2/campaigns/{campaign_id}.json", headers=headers).json()
+    return jsonify({"token_ok": True, "ad_group": ad_group, "campaign": campaign})
 
 
 @app.route("/api/refresh")
