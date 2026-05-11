@@ -158,11 +158,17 @@ def ads_debug():
     if not token:
         return jsonify({"error": "no token after auto-recovery"})
     headers = {"Authorization": f"Bearer {token}"}
-    banners = http.get("https://target.my.com/api/v2/banners.json",
-                       headers=headers, params={"limit": 1}).json()
-    ads = http.get("https://target.my.com/api/v2/ads.json",
-                   headers=headers, params={"limit": 1}).json()
-    return jsonify({"token_ok": True, "banner": banners.get("items", [None])[0], "ad": ads.get("items", [None])[0]})
+    banners_resp = http.get("https://target.my.com/api/v2/banners.json",
+                            headers=headers, params={"limit": 1})
+    ads_resp = http.get("https://target.my.com/api/v2/ads.json",
+                        headers=headers, params={"limit": 1})
+    return jsonify({
+        "token_ok": True,
+        "banners_status": banners_resp.status_code,
+        "banners_raw": banners_resp.text[:500],
+        "ads_status": ads_resp.status_code,
+        "ads_raw": ads_resp.text[:500],
+    })
 
 
 @app.route("/api/refresh")
