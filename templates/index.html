@@ -159,6 +159,41 @@
     .history-date { font-size: 12px; color: #666; margin-bottom: 4px; }
     .history-preview { font-size: 13px; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+    .help-banner {
+      background: #1a1a24;
+      border: 1px solid #2a2a3a;
+      border-radius: 10px;
+      margin-bottom: 20px;
+      overflow: hidden;
+    }
+    .help-toggle {
+      width: 100%;
+      background: none;
+      border: none;
+      padding: 12px 18px;
+      text-align: left;
+      color: #888;
+      font-size: 13px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .help-toggle:hover { color: #ccc; }
+    .help-toggle .arrow { transition: transform 0.2s; display: inline-block; }
+    .help-toggle.open .arrow { transform: rotate(90deg); }
+    .help-body {
+      display: none;
+      padding: 0 18px 16px;
+      font-size: 13px;
+      color: #888;
+      line-height: 1.8;
+    }
+    .help-body.open { display: block; }
+    .help-body b { color: #bbb; }
+    .help-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; margin-top: 8px; }
+    @media (max-width: 700px) { .help-grid { grid-template-columns: 1fr; } }
+
     .error-banner {
       background: #2a1a1a;
       border: 1px solid #5a2a2a;
@@ -220,6 +255,50 @@
 </header>
 
 <div class="container">
+  <div class="help-banner">
+    <button class="help-toggle" id="helpToggle" onclick="toggleHelp()">
+      <span class="arrow">▶</span> Инструкция по работе с дашбордом
+    </button>
+    <div class="help-body" id="helpBody">
+      <div class="help-grid">
+        <div>
+          <b>📊 Верхние карточки</b><br>
+          Общая статистика по последним клипам и рекламе за 30 дней — просмотры, лайки, расход бюджета.
+        </div>
+        <div>
+          <b>↻ Обновить данные</b><br>
+          Подгружает свежую статистику из ВКонтакте без перезагрузки страницы.
+        </div>
+        <div>
+          <b>📋 Таблица видео</b><br>
+          Последние клипы группы. Столбец <b>💬 / 👥</b> — общее число комментариев / уникальных авторов.
+          Нажми на название видео — откроется в ВКонтакте.
+        </div>
+        <div>
+          <b>📣 Реклама в таблице</b><br>
+          Выбери из выпадающего списка кампанию которая продвигала это видео — покажется статистика: показы, клики, CTR, расход.
+        </div>
+        <div>
+          <b>📝 Сценарий</b><br>
+          Кнопка в последней колонке открывает поле для текста или сценария видео.
+          Синяя иконка — сценарий уже добавлен. Claude использует его при анализе.
+        </div>
+        <div>
+          <b>✦ Анализ Claude</b><br>
+          ИИ анализирует статистику всех видео и даёт конкретные рекомендации — что снимать, когда публиковать, что работает лучше.
+        </div>
+        <div>
+          <b>💬 Задать вопрос</b><br>
+          Поле рядом с кнопкой «Спросить» — любой вопрос по данным. Например: «Какое видео дало лучший CTR?» или «Предложи тему для следующего клипа».
+        </div>
+        <div>
+          <b>📚 История анализов</b><br>
+          Справа сохраняются последние 30 анализов — кликни на любой чтобы посмотреть.
+        </div>
+      </div>
+    </div>
+  </div>
+
   {% if error %}
   <div class="error-banner">⚠️ Ошибка загрузки данных: {{ error }}</div>
   {% endif %}
@@ -410,6 +489,18 @@
   function showHistory(text) {
     showAnalysis(text.replace(/\\n/g, '\n'));
     document.getElementById('analysisBox').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function toggleHelp() {
+    const toggle = document.getElementById('helpToggle');
+    const body = document.getElementById('helpBody');
+    const open = body.classList.toggle('open');
+    toggle.classList.toggle('open', open);
+    localStorage.setItem('helpOpen', open ? '1' : '0');
+  }
+  if (localStorage.getItem('helpOpen') === '1') {
+    document.getElementById('helpBody').classList.add('open');
+    document.getElementById('helpToggle').classList.add('open');
   }
 
   const mappings = {{ mappings | tojson }};
