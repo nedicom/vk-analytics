@@ -1,6 +1,7 @@
 from __future__ import annotations
-import requests
+import json
 import os
+import requests
 from datetime import datetime, timedelta
 
 
@@ -55,25 +56,88 @@ def get_group_info(group_id: str, token: str) -> dict:
     return groups[0] if groups else {}
 
 
-_ads_token_cache: dict = {}
+_ADS_TOKEN_FILE = os.path.join(os.path.dirname(__file__), "ads_token_cache.json")
 
-def get_ads_token(client_id: str, client_secret: str) -> str:
-    import time
-    now = time.time()
-    cached = _ads_token_cache.get(client_id)
-    if cached and cached["expires_at"] > now + 60:
-        return cached["token"]
 
+def _load_token_file() -> dict:
+    try:
+        with open(_ADS_TOKEN_FILE, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _save_token_file(data: dict):
+    try:
+        with open(_ADS_TOKEN_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+    except Exception:
+        pass
+
+
+def _delete_ads_tokens(client_id: str, client_secret: str, user_id: str = ""):
+    data = {"client_id": client_id, "client_secret": client_secret}
+    if user_id:
+        data["user_id"] = user_id
+    requests.post("https://target.my.com/api/v2/oauth2/token/delete.json", data=data)
+
+
+def _fetch_new_ads_token(client_id: str, client_secret: str) -> dict:
     resp = requests.post("https://target.my.com/api/v2/oauth2/token.json", data={
         "grant_type": "client_credentials",
         "client_id": client_id,
         "client_secret": client_secret,
     })
-    data = resp.json()
+    return resp.json()
+
+
+def get_ads_token(client_id: str, client_secret: str) -> str:
+    import time
+    now = time.time()
+
+    cache = _load_token_file()
+    cached = cache.get(client_id)
+
+    # Если токен действителен — вернуть
+    if cached and cached.get("expires_at", 0) > now + 60:
+        return cached["token"]
+
+    # Если есть refresh_token — обновить через него
+    if cached and cached.get("refresh_token"):
+        resp = requests.post("https://target.my.com/api/v2/oauth2/token.json", data={
+            "grant_type": "refresh_token",
+            "refresh_token": cached["refresh_token"],
+            "client_id": client_id,
+            "client_secret": client_secret,
+        })
+        data = resp.json()
+        if data.get("access_token"):
+            entry = {
+                "token": data["access_token"],
+                "refresh_token": data.get("refresh_token", cached["refresh_token"]),
+                "expires_at": now + int(data.get("expires_in", 86400)),
+            }
+            cache[client_id] = entry
+            _save_token_file(cache)
+            return entry["token"]
+
+    # Запросить новый токен через client_credentials
+    data = _fetch_new_ads_token(client_id, client_secret)
+
+    # При превышении лимита — удалить все токены и повторить
+    if data.get("error") == "token_limit_exceeded":
+        user_id = str(data.get("user_id", ""))
+        _delete_ads_tokens(client_id, client_secret, user_id)
+        data = _fetch_new_ads_token(client_id, client_secret)
+
     token = data.get("access_token", "")
-    expires_in = int(data.get("expires_in", 86400))
     if token:
-        _ads_token_cache[client_id] = {"token": token, "expires_at": now + expires_in}
+        cache[client_id] = {
+            "token": token,
+            "refresh_token": data.get("refresh_token", ""),
+            "expires_at": now + int(data.get("expires_in", 86400)),
+        }
+        _save_token_file(cache)
     return token
 
 

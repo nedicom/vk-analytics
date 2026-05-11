@@ -1,5 +1,6 @@
 .env
 history.json
+ads_token_cache.json
 .claude/
 __pycache__/
 *.pyc
