@@ -299,6 +299,8 @@
               <th>💬 Коммент.</th>
               <th>↗️ Репосты</th>
               <th>⏱ Длит.</th>
+              <th>👥 Комментаторы</th>
+              <th>📣 Реклама</th>
               <th>📝</th>
             </tr>
           </thead>
@@ -314,6 +316,21 @@
               <td class="num">{{ v.comments }}</td>
               <td class="num">{{ v.reposts }}</td>
               <td class="num">{{ (v.duration // 60)|string + ':' + '%02d'|format(v.duration % 60) if v.duration else '—' }}</td>
+              {% set cs = comments_stats.get(v.id|string, {}) %}
+              <td class="num" title="{{ cs.get('sample_names', [])|join(', ') }}">
+                {% if cs.get('unique_commenters') %}
+                  {{ cs.unique_commenters }} чел.
+                  {% if cs.last_comment %}<div class="date">{{ cs.last_comment }}</div>{% endif %}
+                {% else %}—{% endif %}
+              </td>
+              {% set av = ads_per_video.get(v.id|string, {}) %}
+              <td class="num">
+                {% if av %}
+                  👁 {{ '{:,}'.format(av.impressions).replace(',', ' ') }}<br>
+                  🖱 {{ av.clicks }} ({{ av.ctr }}%)<br>
+                  💰 {{ av.spent }} ₽
+                {% else %}—{% endif %}
+              </td>
               <td>
                 <button class="btn-script {% if scripts.get(v.id|string) %}has-script{% endif %}"
                         id="btn-{{ v.id }}"
@@ -323,7 +340,7 @@
               </td>
             </tr>
             <tr class="script-row" id="script-row-{{ v.id }}" style="display:none;">
-              <td colspan="8">
+              <td colspan="10">
                 <textarea id="script-text-{{ v.id }}" placeholder="Вставьте сценарий или описание видео…">{{ scripts.get(v.id|string, '') }}</textarea>
                 <div class="script-actions">
                   <button class="btn-save-script" onclick="saveScript('{{ v.id }}')">Сохранить</button>
@@ -332,7 +349,7 @@
               </td>
             </tr>
             {% else %}
-            <tr><td colspan="8" class="empty">Нет данных</td></tr>
+            <tr><td colspan="10" class="empty">Нет данных</td></tr>
             {% endfor %}
           </tbody>
         </table>

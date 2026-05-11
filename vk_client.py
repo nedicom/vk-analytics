@@ -30,6 +30,7 @@ def get_videos(group_id: str, token: str, count: int = 50) -> list[dict]:
                 continue
             result.append({
                 "id": v["id"],
+                "post_id": post["id"],
                 "owner_id": v.get("owner_id", f"-{group_id}"),
                 "title": v.get("description") or v.get("title", ""),
                 "views": v.get("views", 0),
@@ -38,6 +39,7 @@ def get_videos(group_id: str, token: str, count: int = 50) -> list[dict]:
                 "reposts": post.get("reposts", {}).get("count", 0),
                 "duration": v.get("duration", 0),
                 "date": datetime.fromtimestamp(post["date"]).strftime("%d.%m.%Y") if post.get("date") else "",
+                "post_date_ts": post.get("date", 0),
             })
     return result
 
@@ -181,6 +183,103 @@ def get_ads_stats(client_id: str, client_secret: str) -> dict:
         "total_spent": round(total_spent, 2),
         "ctr": round(total_clicks / total_impressions * 100, 2) if total_impressions else 0,
     }
+
+
+def get_comments_stats(group_id: str, token: str, videos: list[dict]) -> dict:
+    """Для каждого видео получает авторов комментариев и дату последнего."""
+    result = {}
+    for v in videos[:15]:  # ограничим 15 чтобы не перегружать API
+        post_id = v.get("post_id")
+        if not post_id:
+            continue
+        resp = requests.get("https://api.vk.com/method/wall.getComments", params={
+            "owner_id": f"-{group_id}",
+            "post_id": post_id,
+            "count": 100,
+            "sort": "desc",
+            "fields": "first_name,last_name",
+            "access_token": token,
+            "v": VK_API_VERSION,
+        })
+        data = resp.json().get("response", {})
+        items = data.get("items", [])
+        profiles = {p["id"]: f"{p.get('first_name','')} {p.get('last_name','')}".strip()
+                    for p in data.get("profiles", [])}
+        unique_users = set()
+        last_date = None
+        for c in items:
+            uid = c.get("from_id")
+            if uid and uid > 0:
+                unique_users.add(profiles.get(uid, f"id{uid}"))
+            if not last_date and c.get("date"):
+                last_date = datetime.fromtimestamp(c["date"]).strftime("%d.%m.%Y")
+        result[str(v["id"])] = {
+            "unique_commenters": len(unique_users),
+            "last_comment": last_date,
+            "sample_names": list(unique_users)[:3],
+        }
+    return result
+
+
+def get_ads_stats_per_video(client_id: str, client_secret: str, group_id: str) -> dict:
+    """Возвращает статистику рекламы по video_id на основе URL баннеров."""
+    token = get_ads_token(client_id, client_secret)
+    if not token:
+        return {}
+
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Получаем все объявления (баннеры)
+    banners_resp = requests.get("https://target.my.com/api/v2/banners.json",
+                                headers=headers, params={"limit": 250})
+    banners_data = banners_resp.json()
+    if "error" in banners_data:
+        return {}
+
+    # Сопоставляем баннер → video_id по URL
+    banner_to_video: dict[int, str] = {}
+    for b in banners_data.get("items", []):
+        url = b.get("url", "") or ""
+        # URL вида https://vk.com/video-72406118_XXXXX
+        if f"video-{group_id}_" in url:
+            vid = url.split(f"video-{group_id}_")[-1].split("?")[0].strip()
+            if vid.isdigit():
+                banner_to_video[b["id"]] = vid
+
+    if not banner_to_video:
+        return {}
+
+    # Статистика по баннерам
+    banner_ids = ",".join(str(bid) for bid in banner_to_video)
+    date_to = datetime.now().strftime("%Y-%m-%d")
+    date_from = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")
+    stats_resp = requests.get(
+        "https://target.my.com/api/v2/statistics/banners/day.json",
+        headers=headers,
+        params={"id": banner_ids, "date_from": date_from, "date_to": date_to},
+    )
+    stats_data = stats_resp.json()
+
+    video_stats: dict[str, dict] = {}
+    for item in stats_data.get("items", []):
+        bid = item.get("id")
+        vid = banner_to_video.get(bid)
+        if not vid:
+            continue
+        if vid not in video_stats:
+            video_stats[vid] = {"impressions": 0, "clicks": 0, "spent": 0.0}
+        for row in item.get("rows", []):
+            base = row.get("base", {})
+            video_stats[vid]["impressions"] += base.get("shows", 0)
+            video_stats[vid]["clicks"] += base.get("clicks", 0)
+            video_stats[vid]["spent"] += float(base.get("spent", 0) or 0)
+
+    for vid in video_stats:
+        s = video_stats[vid]
+        s["spent"] = round(s["spent"], 2)
+        s["ctr"] = round(s["clicks"] / s["impressions"] * 100, 2) if s["impressions"] else 0
+
+    return video_stats
 
 
 def get_group_stats(group_id: str, token: str) -> list[dict]:

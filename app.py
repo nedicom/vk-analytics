@@ -7,7 +7,7 @@ import requests as http
 from dotenv import load_dotenv, set_key
 from flask import Flask, jsonify, redirect, render_template, request, session
 
-from vk_client import get_ads_stats, get_group_info, get_group_stats, get_videos
+from vk_client import get_ads_stats, get_ads_stats_per_video, get_comments_stats, get_group_info, get_group_stats, get_videos
 
 load_dotenv()
 
@@ -124,7 +124,9 @@ def index():
     ads = get_ads_stats(ADS_CLIENT_ID, ADS_CLIENT_SECRET) if ADS_CLIENT_ID else {}
     history = load_history()
     scripts = load_scripts()
-    return render_template("index.html", videos=videos, history=history, error=error, group_info=group_info, stats=stats, ads=ads, scripts=scripts)
+    comments_stats = get_comments_stats(VK_GROUP_ID, VK_TOKEN, videos)
+    ads_per_video = get_ads_stats_per_video(ADS_CLIENT_ID, ADS_CLIENT_SECRET, VK_GROUP_ID) if ADS_CLIENT_ID else {}
+    return render_template("index.html", videos=videos, history=history, error=error, group_info=group_info, stats=stats, ads=ads, scripts=scripts, comments_stats=comments_stats, ads_per_video=ads_per_video)
 
 
 @app.route("/api/scripts", methods=["GET"])
