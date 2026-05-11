@@ -2,19 +2,24 @@ import json
 import os
 from datetime import datetime
 
-import anthropic
-from dotenv import load_dotenv
-from flask import Flask, jsonify, render_template, request
+import requests as http
+from dotenv import load_dotenv, set_key
+from flask import Flask, jsonify, redirect, render_template, request
 
 from vk_client import get_group_stats, get_videos
 
 load_dotenv()
+
+print("TOKEN:", os.getenv("VK_TOKEN", "")[:15], "| GROUP:", os.getenv("VK_GROUP_ID"))
 
 app = Flask(__name__)
 
 VK_TOKEN = os.getenv("VK_TOKEN")
 VK_GROUP_ID = os.getenv("VK_GROUP_ID")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+VK_APP_ID = os.getenv("VK_APP_ID", "54587433")
+VK_APP_SECRET = os.getenv("VK_APP_SECRET", "")
+VK_REDIRECT_URI = os.getenv("VK_REDIRECT_URI", "https://vk.nedicom.ru/callback")
 
 HISTORY_FILE = "history.json"
 
@@ -90,6 +95,7 @@ def analyze():
         "Дай конкретные рекомендации для роста просмотров и продаж."
     )
 
+    import anthropic
     claude = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     response = claude.messages.create(
         model="claude-sonnet-4-6",
@@ -101,6 +107,50 @@ def analyze():
     analysis = response.content[0].text
     save_to_history(analysis, len(videos))
     return jsonify({"ok": True, "analysis": analysis})
+
+
+@app.route("/auth")
+def auth():
+    url = (
+        f"https://oauth.vk.com/authorize"
+        f"?client_id={VK_APP_ID}"
+        f"&redirect_uri={VK_REDIRECT_URI}"
+        f"&scope=video,stats,ads,groups"
+        f"&response_type=code"
+        f"&v=5.199"
+    )
+    return redirect(url)
+
+
+@app.route("/callback")
+def callback():
+    code = request.args.get("code")
+    error = request.args.get("error_description")
+    if error:
+        return f"<p>Ошибка: {error}</p>"
+    if not code:
+        return "<p>Код не получен</p>"
+
+    resp = http.get("https://oauth.vk.com/access_token", params={
+        "client_id": VK_APP_ID,
+        "client_secret": VK_APP_SECRET,
+        "redirect_uri": VK_REDIRECT_URI,
+        "code": code,
+    })
+    data = resp.json()
+
+    if "error" in data:
+        return f"<p>Ошибка VK: {data}</p>"
+
+    token = data.get("access_token", "")
+    user_id = data.get("user_id", "")
+    return f"""
+    <h2>Токен получен!</h2>
+    <p>User ID: {user_id}</p>
+    <p>Скопируй токен в .env как VK_TOKEN:</p>
+    <textarea rows="4" cols="80" onclick="this.select()">{token}</textarea>
+    <br><br><a href="/">Вернуться на дашборд</a>
+    """
 
 
 if __name__ == "__main__":
