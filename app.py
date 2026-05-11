@@ -1,10 +1,11 @@
 import json
 import os
 from datetime import datetime
+from functools import wraps
 
 import requests as http
 from dotenv import load_dotenv, set_key
-from flask import Flask, jsonify, redirect, render_template, request
+from flask import Flask, jsonify, redirect, render_template, request, session
 
 from vk_client import get_ads_stats, get_group_info, get_group_stats, get_videos
 
@@ -12,6 +13,7 @@ load_dotenv()
 
 
 app = Flask(__name__)
+app.secret_key = os.getenv("SECRET_KEY", "change-me-on-server")
 
 VK_TOKEN = os.getenv("VK_TOKEN")
 VK_GROUP_ID = os.getenv("VK_GROUP_ID")
@@ -21,8 +23,18 @@ VK_APP_SECRET = os.getenv("VK_APP_SECRET", "")
 VK_REDIRECT_URI = os.getenv("VK_REDIRECT_URI", "https://vk.nedicom.ru/callback")
 ADS_CLIENT_ID = os.getenv("ADS_VK_CLIENT_ID", "")
 ADS_CLIENT_SECRET = os.getenv("ADS_VK_SECRET", "")
+DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "")
 
 HISTORY_FILE = "history.json"
+
+
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if DASHBOARD_PASSWORD and not session.get("authenticated"):
+            return redirect("/login")
+        return f(*args, **kwargs)
+    return decorated
 
 SYSTEM_PROMPT = """Ты опытный аналитик контента ВКонтакте. Помогаешь автору видеоканала принимать решения на основе данных: что снимать, когда публиковать, как увеличить охват и продажи.
 
@@ -68,7 +80,25 @@ def calc_stats(videos: list) -> dict:
     }
 
 
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    error = None
+    if request.method == "POST":
+        if request.form.get("password") == DASHBOARD_PASSWORD:
+            session["authenticated"] = True
+            return redirect("/")
+        error = "Неверный пароль"
+    return render_template("login.html", error=error)
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/login")
+
+
 @app.route("/")
+@login_required
 def index():
     try:
         videos = get_videos(VK_GROUP_ID, VK_TOKEN, count=30)
@@ -84,6 +114,7 @@ def index():
 
 
 @app.route("/api/ads-debug")
+@login_required
 def ads_debug():
     from vk_client import get_ads_token
     if not ADS_CLIENT_ID or not ADS_CLIENT_SECRET:
@@ -98,6 +129,7 @@ def ads_debug():
 
 
 @app.route("/api/refresh")
+@login_required
 def refresh():
     try:
         videos = get_videos(VK_GROUP_ID, VK_TOKEN, count=30)
@@ -107,6 +139,7 @@ def refresh():
 
 
 @app.route("/api/analyze", methods=["POST"])
+@login_required
 def analyze():
     if not ANTHROPIC_API_KEY:
         return jsonify({"ok": False, "error": "API ключ Claude не настроен. Добавьте ANTHROPIC_API_KEY в .env"}), 503
