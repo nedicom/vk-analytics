@@ -237,18 +237,11 @@ def get_ads_stats_per_video(client_id: str, client_secret: str, mappings: dict) 
     ids = list(set(mappings.values()))
     ids_str = ",".join(str(i) for i in ids)
     stats_resp = requests.get(
-        "https://target.my.com/api/v2/statistics/packages/day.json",
+        "https://target.my.com/api/v2/statistics/ad_plans/day.json",
         headers=headers,
         params={"id": ids_str, "date_from": date_from, "date_to": date_to},
     )
     stats_data = stats_resp.json()
-    if not stats_data.get("items"):
-        stats_resp = requests.get(
-            "https://target.my.com/api/v2/statistics/campaigns/day.json",
-            headers=headers,
-            params={"id": ids_str, "date_from": date_from, "date_to": date_to},
-        )
-        stats_data = stats_resp.json()
 
     # Суммируем статистику по campaign_id
     campaign_stats: dict[int, dict] = {}

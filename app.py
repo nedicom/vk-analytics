@@ -172,17 +172,9 @@ def get_campaigns():
     if not token:
         return jsonify([])
     headers = {"Authorization": f"Bearer {token}"}
-    # Пробуем ad_plans — верхний уровень в иерархии myTarget
-    for endpoint in ["ad_plans", "packages"]:
-        data = http.get(f"https://target.my.com/api/v2/{endpoint}.json",
-                        headers=headers, params={"limit": 250}).json()
-        items = data.get("items", [])
-        if items and items[0].get("name", "").startswith("Группа") is False:
-            return jsonify([{"id": i["id"], "name": i.get("name", f"id{i['id']}")} for i in items])
-    # Fallback — campaigns как есть
-    data = http.get("https://target.my.com/api/v2/campaigns.json",
+    data = http.get("https://target.my.com/api/v2/ad_plans.json",
                     headers=headers, params={"limit": 250}).json()
-    return jsonify([{"id": c["id"], "name": c["name"]} for c in data.get("items", [])])
+    return jsonify([{"id": p["id"], "name": p["name"]} for p in data.get("items", [])])
 
 
 @app.route("/api/ads-debug")
