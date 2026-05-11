@@ -323,9 +323,9 @@
               <td class="num">{{ v.reposts }}</td>
               <td class="num">{{ (v.duration // 60)|string + ':' + '%02d'|format(v.duration % 60) if v.duration else '—' }}</td>
               {% set av = ads_per_video.get(v.id|string, {}) %}
-              <td class="num" style="min-width:220px;">
+              <td class="num" style="min-width:300px;white-space:nowrap;">
                 {% if av %}
-                <div style="display:flex;gap:12px;flex-wrap:nowrap;margin-bottom:4px;font-size:12px;">
+                <div style="display:flex;gap:14px;flex-wrap:nowrap;margin-bottom:4px;font-size:12px;white-space:nowrap;">
                   <span>👁 {{ '{:,}'.format(av.impressions).replace(',', ' ') }}</span>
                   <span>🖱 {{ av.clicks }} ({{ av.ctr }}%)</span>
                   <span>💰 {{ av.spent }} ₽</span>
