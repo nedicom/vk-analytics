@@ -167,7 +167,10 @@ def analyze():
     )
 
     import anthropic
-    claude = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    import httpx
+    _proxy = os.getenv("HTTPS_PROXY")
+    _http_client = httpx.Client(proxy=_proxy) if _proxy else None
+    claude = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY, http_client=_http_client)
     try:
         response = claude.messages.create(
             model="claude-sonnet-4-6",
