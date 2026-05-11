@@ -74,12 +74,23 @@ def load_history() -> list:
     return []
 
 
-def save_to_history(analysis: str, video_count: int):
+def _extract_title(analysis: str) -> str:
+    for line in analysis.split("\n"):
+        line = line.strip().lstrip("#").strip()
+        if line:
+            return line[:100]
+    return "Анализ"
+
+
+def save_to_history(analysis: str, video_count: int, question: str = ""):
     history = load_history()
+    title = question.strip() if question.strip() else _extract_title(analysis)
     history.append({
         "date": datetime.now().strftime("%d.%m.%Y %H:%M"),
         "analysis": analysis,
         "video_count": video_count,
+        "title": title,
+        "is_question": bool(question.strip()),
     })
     with open(HISTORY_FILE, "w", encoding="utf-8") as f:
         json.dump(history, f, ensure_ascii=False, indent=2)
@@ -267,8 +278,9 @@ def analyze():
         return jsonify({"ok": False, "error": f"Anthropic API: {e.status_code} — {e.message}"}), 200
 
     analysis = response.content[0].text
-    save_to_history(analysis, len(videos))
-    return jsonify({"ok": True, "analysis": analysis})
+    title = question.strip() if question.strip() else _extract_title(analysis)
+    save_to_history(analysis, len(videos), question)
+    return jsonify({"ok": True, "analysis": analysis, "title": title, "is_question": bool(question.strip())})
 
 
 @app.route("/auth")

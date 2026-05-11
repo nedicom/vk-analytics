@@ -447,6 +447,7 @@
           <div class="analysis-placeholder" id="analysisPlaceholder">
             Нажмите «Анализ Claude»<br>чтобы получить рекомендации
           </div>
+          <div id="analysisTitle" style="display:none;font-size:12px;color:#5b8dee;font-weight:600;margin-bottom:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
           <div class="analysis-text" id="analysisText" style="display:none"></div>
         </div>
       </div>
@@ -456,9 +457,9 @@
         <div class="card-header">История анализов</div>
         <div class="history-list">
           {% for h in history|reverse %}
-          <div class="history-item" onclick="showHistory(`{{ h.analysis | replace('`', "'") | replace('\n', '\\n') }}`)">
-            <div class="history-date">{{ h.date }}</div>
-            <div class="history-preview">{{ h.analysis[:80] }}…</div>
+          <div class="history-item" onclick="showHistory(`{{ h.analysis | replace('`', "'") | replace('\n', '\\n') }}`, `{{ (h.get('title') or '') | replace('`', "'") }}`, {{ 'true' if h.get('is_question') else 'false' }})">
+            <div class="history-date">{{ h.date }}{% if h.get('is_question') %} &nbsp;·&nbsp; <span style="color:#5b8dee">вопрос</span>{% endif %}</div>
+            <div class="history-preview">{% if h.get('is_question') %}💬 {% endif %}{{ h.get('title') or h.analysis[:80] }}</div>
           </div>
           {% endfor %}
         </div>
@@ -479,15 +480,22 @@
     document.getElementById('status').textContent = msg;
   }
 
-  function showAnalysis(text) {
+  function showAnalysis(text, title, isQuestion) {
     document.getElementById('analysisPlaceholder').style.display = 'none';
+    const titleEl = document.getElementById('analysisTitle');
+    if (title) {
+      titleEl.style.display = 'block';
+      titleEl.textContent = (isQuestion ? '💬 ' : '✦ ') + title;
+    } else {
+      titleEl.style.display = 'none';
+    }
     const el = document.getElementById('analysisText');
     el.style.display = 'block';
     el.textContent = text;
   }
 
-  function showHistory(text) {
-    showAnalysis(text.replace(/\\n/g, '\n'));
+  function showHistory(text, title, isQuestion) {
+    showAnalysis(text.replace(/\\n/g, '\n'), title, isQuestion);
     document.getElementById('analysisBox').scrollIntoView({ behavior: 'smooth' });
   }
 
@@ -586,7 +594,7 @@
       });
       const data = await r.json();
       if (data.ok) {
-        showAnalysis(data.analysis);
+        showAnalysis(data.analysis, data.title, data.is_question);
         setStatus('Готово');
       } else {
         setStatus('Ошибка: ' + data.error);
