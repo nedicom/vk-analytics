@@ -188,6 +188,7 @@ def analyze():
         last = past[-1]
         past_context = f"\n\nПрошлый анализ ({last['date']}):\n{last['analysis'][:800]}\n"
 
+    question = (request.json or {}).get("question", "").strip()
     scripts = load_scripts()
     videos_text = "\n".join([
         f"• «{v['title']}» | {v['date']} | 👁 {v['views']} | ❤️ {v['likes']} | 💬 {v['comments']} | ↗️ {v['reposts']} | ⏱ {v['duration']}с"
@@ -195,12 +196,18 @@ def analyze():
         for v in videos
     ])
 
-    user_message = (
-        f"Статистика последних {len(videos)} видео группы:{past_context}\n\n{videos_text}\n\n"
-        "Проанализируй результаты с учётом сценариев там где они есть. "
-        "Что работает лучше всего? Какие темы и форматы дают больший охват? "
-        "Дай конкретные рекомендации для роста просмотров и продаж."
-    )
+    if question:
+        user_message = (
+            f"Данные последних {len(videos)} видео группы:{past_context}\n\n{videos_text}\n\n"
+            f"Вопрос: {question}"
+        )
+    else:
+        user_message = (
+            f"Статистика последних {len(videos)} видео группы:{past_context}\n\n{videos_text}\n\n"
+            "Проанализируй результаты с учётом сценариев там где они есть. "
+            "Что работает лучше всего? Какие темы и форматы дают больший охват? "
+            "Дай конкретные рекомендации для роста просмотров и продаж."
+        )
 
     import anthropic
     import httpx

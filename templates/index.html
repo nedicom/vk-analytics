@@ -277,6 +277,13 @@
     <div class="spinner" id="spinner"></div>
     <span class="status" id="status"></span>
   </div>
+  <div class="toolbar" style="margin-top:-12px;margin-bottom:24px;">
+    <input type="text" id="customQuestion" placeholder="Задать вопрос Claude по статистике…"
+      style="flex:1;background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;padding:10px 14px;color:#e0e0e0;font-size:14px;outline:none;"
+      onkeydown="if(event.key==='Enter')askQuestion()"
+      onfocus="this.style.borderColor='#5b8dee'" onblur="this.style.borderColor='#2a2a3a'">
+    <button class="btn btn-primary" onclick="askQuestion()">Спросить</button>
+  </div>
 
   <div class="grid">
     <div class="card">
@@ -426,11 +433,15 @@
     }
   }
 
-  async function analyzeData() {
+  async function analyzeData(question = '') {
     setLoading(true);
-    setStatus('Claude анализирует…');
+    setStatus(question ? 'Claude отвечает…' : 'Claude анализирует…');
     try {
-      const r = await fetch('/api/analyze', { method: 'POST' });
+      const r = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({question})
+      });
       const data = await r.json();
       if (data.ok) {
         showAnalysis(data.analysis);
@@ -443,6 +454,12 @@
     } finally {
       setLoading(false);
     }
+  }
+
+  function askQuestion() {
+    const q = document.getElementById('customQuestion').value.trim();
+    if (!q) return;
+    analyzeData(q);
   }
 </script>
 
