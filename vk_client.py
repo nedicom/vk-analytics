@@ -30,6 +30,7 @@ def get_videos(group_id: str, token: str, count: int = 50) -> list[dict]:
                 continue
             result.append({
                 "id": v["id"],
+                "owner_id": v.get("owner_id", f"-{group_id}"),
                 "title": v.get("description") or v.get("title", ""),
                 "views": v.get("views", 0),
                 "likes": post.get("likes", {}).get("count", 0),
@@ -37,7 +38,6 @@ def get_videos(group_id: str, token: str, count: int = 50) -> list[dict]:
                 "reposts": post.get("reposts", {}).get("count", 0),
                 "duration": v.get("duration", 0),
                 "date": datetime.fromtimestamp(post["date"]).strftime("%d.%m.%Y") if post.get("date") else "",
-                "description": "",
             })
     return result
 

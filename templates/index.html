@@ -255,17 +255,21 @@
               <th>👁 Просмотры</th>
               <th>❤️ Лайки</th>
               <th>💬 Коммент.</th>
+              <th>↗️ Репосты</th>
               <th>⏱ Длит.</th>
             </tr>
           </thead>
           <tbody>
             {% for v in videos %}
             <tr>
-              <td class="video-title" title="{{ v.title }}">{{ v.title }}</td>
+              <td class="video-title" title="{{ v.title }}">
+                <a href="https://vk.com/video{{ v.owner_id }}_{{ v.id }}" target="_blank" style="color:#5b8dee;text-decoration:none;">{{ v.title }}</a>
+              </td>
               <td class="date">{{ v.date }}</td>
               <td class="{% if v.views > 1000 %}num-high{% else %}num{% endif %}">{{ '{:,}'.format(v.views).replace(',', ' ') }}</td>
               <td class="num">{{ v.likes }}</td>
               <td class="num">{{ v.comments }}</td>
+              <td class="num">{{ v.reposts }}</td>
               <td class="num">{{ (v.duration // 60)|string + ':' + '%02d'|format(v.duration % 60) if v.duration else '—' }}</td>
             </tr>
             {% else %}
