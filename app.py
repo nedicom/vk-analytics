@@ -174,7 +174,8 @@ def get_campaigns():
     headers = {"Authorization": f"Bearer {token}"}
     data = http.get("https://target.my.com/api/v2/ad_plans.json",
                     headers=headers, params={"limit": 250}).json()
-    return jsonify([{"id": p["id"], "name": p["name"]} for p in data.get("items", [])])
+    items = sorted(data.get("items", []), key=lambda x: x["id"], reverse=True)
+    return jsonify([{"id": p["id"], "name": p["name"]} for p in items])
 
 
 @app.route("/api/ads-debug")
