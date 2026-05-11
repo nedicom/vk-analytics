@@ -26,6 +26,19 @@ ADS_CLIENT_SECRET = os.getenv("ADS_VK_SECRET", "")
 DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "")
 
 HISTORY_FILE = "history.json"
+SCRIPTS_FILE = "video_scripts.json"
+
+
+def load_scripts() -> dict:
+    if os.path.exists(SCRIPTS_FILE):
+        with open(SCRIPTS_FILE, encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+
+def save_scripts(scripts: dict):
+    with open(SCRIPTS_FILE, "w", encoding="utf-8") as f:
+        json.dump(scripts, f, ensure_ascii=False, indent=2)
 
 
 def login_required(f):
@@ -110,7 +123,27 @@ def index():
     stats = calc_stats(videos)
     ads = get_ads_stats(ADS_CLIENT_ID, ADS_CLIENT_SECRET) if ADS_CLIENT_ID else {}
     history = load_history()
-    return render_template("index.html", videos=videos, history=history, error=error, group_info=group_info, stats=stats, ads=ads)
+    scripts = load_scripts()
+    return render_template("index.html", videos=videos, history=history, error=error, group_info=group_info, stats=stats, ads=ads, scripts=scripts)
+
+
+@app.route("/api/scripts", methods=["GET"])
+@login_required
+def get_scripts():
+    return jsonify(load_scripts())
+
+
+@app.route("/api/script/<video_id>", methods=["POST"])
+@login_required
+def save_script(video_id):
+    text = request.json.get("text", "").strip()
+    scripts = load_scripts()
+    if text:
+        scripts[video_id] = text
+    else:
+        scripts.pop(video_id, None)
+    save_scripts(scripts)
+    return jsonify({"ok": True})
 
 
 @app.route("/api/ads-debug")
@@ -155,14 +188,17 @@ def analyze():
         last = past[-1]
         past_context = f"\n\nПрошлый анализ ({last['date']}):\n{last['analysis'][:800]}\n"
 
+    scripts = load_scripts()
     videos_text = "\n".join([
         f"• «{v['title']}» | {v['date']} | 👁 {v['views']} | ❤️ {v['likes']} | 💬 {v['comments']} | ↗️ {v['reposts']} | ⏱ {v['duration']}с"
+        + (f"\n  Сценарий: {scripts[str(v['id'])]}" if str(v['id']) in scripts else "")
         for v in videos
     ])
 
     user_message = (
         f"Статистика последних {len(videos)} видео группы:{past_context}\n\n{videos_text}\n\n"
-        "Проанализируй результаты. Что работает лучше всего? Какие паттерны видишь? "
+        "Проанализируй результаты с учётом сценариев там где они есть. "
+        "Что работает лучше всего? Какие темы и форматы дают больший охват? "
         "Дай конкретные рекомендации для роста просмотров и продаж."
     )
 

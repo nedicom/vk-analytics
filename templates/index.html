@@ -171,6 +171,41 @@
 
     .empty { color: #555; padding: 20px; font-size: 13px; text-align: center; }
 
+    .btn-script {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      opacity: 0.5;
+      transition: opacity 0.2s;
+    }
+    .btn-script:hover { opacity: 1; }
+    .btn-script.has-script { opacity: 1; color: #5b8dee; }
+
+    .script-row td {
+      padding: 0 16px 12px 16px;
+      border-bottom: 1px solid #1e1e2a;
+    }
+    .script-row textarea {
+      width: 100%;
+      background: #0f0f13;
+      border: 1px solid #2a2a3a;
+      border-radius: 6px;
+      color: #ccc;
+      font-size: 13px;
+      padding: 8px 10px;
+      resize: vertical;
+      min-height: 80px;
+      font-family: inherit;
+      outline: none;
+    }
+    .script-row textarea:focus { border-color: #5b8dee; }
+    .script-actions { display: flex; gap: 8px; margin-top: 6px; }
+    .btn-save-script { background: #5b8dee; color: #fff; border: none; border-radius: 6px; padding: 6px 14px; font-size: 13px; cursor: pointer; }
+    .btn-cancel-script { background: #2a2a3a; color: #aaa; border: none; border-radius: 6px; padding: 6px 14px; font-size: 13px; cursor: pointer; }
+
     @media (max-width: 900px) {
       .grid { grid-template-columns: 1fr; }
       .container { padding: 16px; }
@@ -257,11 +292,12 @@
               <th>💬 Коммент.</th>
               <th>↗️ Репосты</th>
               <th>⏱ Длит.</th>
+              <th>📝</th>
             </tr>
           </thead>
           <tbody>
             {% for v in videos %}
-            <tr>
+            <tr id="row-{{ v.id }}">
               <td class="video-title" title="{{ v.title }}">
                 <a href="https://vk.com/video{{ v.owner_id }}_{{ v.id }}" target="_blank" style="color:#5b8dee;text-decoration:none;">{{ v.title }}</a>
               </td>
@@ -271,9 +307,25 @@
               <td class="num">{{ v.comments }}</td>
               <td class="num">{{ v.reposts }}</td>
               <td class="num">{{ (v.duration // 60)|string + ':' + '%02d'|format(v.duration % 60) if v.duration else '—' }}</td>
+              <td>
+                <button class="btn-script {% if scripts.get(v.id|string) %}has-script{% endif %}"
+                        id="btn-{{ v.id }}"
+                        onclick="toggleScript('{{ v.id }}', '{{ v.title|replace("'", "\\'") }}')">
+                  📝
+                </button>
+              </td>
+            </tr>
+            <tr class="script-row" id="script-row-{{ v.id }}" style="display:none;">
+              <td colspan="8">
+                <textarea id="script-text-{{ v.id }}" placeholder="Вставьте сценарий или описание видео…">{{ scripts.get(v.id|string, '') }}</textarea>
+                <div class="script-actions">
+                  <button class="btn-save-script" onclick="saveScript('{{ v.id }}')">Сохранить</button>
+                  <button class="btn-cancel-script" onclick="toggleScript('{{ v.id }}')">Отмена</button>
+                </div>
+              </td>
             </tr>
             {% else %}
-            <tr><td colspan="6" class="empty">Нет данных</td></tr>
+            <tr><td colspan="8" class="empty">Нет данных</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -329,6 +381,30 @@
   function showHistory(text) {
     showAnalysis(text.replace(/\\n/g, '\n'));
     document.getElementById('analysisBox').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function toggleScript(videoId) {
+    const row = document.getElementById('script-row-' + videoId);
+    const isHidden = row.style.display === 'none';
+    row.style.display = isHidden ? 'table-row' : 'none';
+    if (isHidden) {
+      document.getElementById('script-text-' + videoId).focus();
+    }
+  }
+
+  async function saveScript(videoId) {
+    const text = document.getElementById('script-text-' + videoId).value;
+    const r = await fetch('/api/script/' + videoId, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({text})
+    });
+    const data = await r.json();
+    if (data.ok) {
+      const btn = document.getElementById('btn-' + videoId);
+      btn.classList.toggle('has-script', text.trim().length > 0);
+      document.getElementById('script-row-' + videoId).style.display = 'none';
+    }
   }
 
   async function refreshData() {
