@@ -88,9 +88,17 @@ def ads_debug():
     from vk_client import get_ads_token
     import requests as req
     from datetime import datetime, timedelta
-    token = get_ads_token(ADS_CLIENT_ID, ADS_CLIENT_SECRET)
+    if not ADS_CLIENT_ID or not ADS_CLIENT_SECRET:
+        return jsonify({"error": "env not set", "ADS_CLIENT_ID": bool(ADS_CLIENT_ID), "ADS_CLIENT_SECRET": bool(ADS_CLIENT_SECRET)})
+    raw = req.post("https://target.my.com/api/v2/oauth2/token.json", data={
+        "grant_type": "client_credentials",
+        "client_id": ADS_CLIENT_ID,
+        "client_secret": ADS_CLIENT_SECRET,
+    })
+    token_data = raw.json()
+    token = token_data.get("access_token", "")
     if not token:
-        return jsonify({"error": "no token"})
+        return jsonify({"error": "no token", "response": token_data})
     headers = {"Authorization": f"Bearer {token}"}
     campaigns = req.get("https://target.my.com/api/v2/campaigns.json",
                         headers=headers, params={"_count": 250}).json()
