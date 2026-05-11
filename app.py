@@ -160,15 +160,13 @@ def ads_debug():
     headers = {"Authorization": f"Bearer {token}"}
     banners_resp = http.get("https://target.my.com/api/v2/banners.json",
                             headers=headers, params={"limit": 1})
-    ads_resp = http.get("https://target.my.com/api/v2/ads.json",
-                        headers=headers, params={"limit": 1})
-    return jsonify({
-        "token_ok": True,
-        "banners_status": banners_resp.status_code,
-        "banners_raw": banners_resp.text[:500],
-        "ads_status": ads_resp.status_code,
-        "ads_raw": ads_resp.text[:500],
-    })
+    banners_data = banners_resp.json()
+    first_id = banners_data.get("items", [{}])[0].get("id")
+    single = {}
+    if first_id:
+        single = http.get(f"https://target.my.com/api/v2/banners/{first_id}.json",
+                          headers=headers).json()
+    return jsonify({"token_ok": True, "single_banner": single})
 
 
 @app.route("/api/refresh")
