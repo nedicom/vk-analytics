@@ -55,14 +55,26 @@ def get_group_info(group_id: str, token: str) -> dict:
     return groups[0] if groups else {}
 
 
+_ads_token_cache: dict = {}
+
 def get_ads_token(client_id: str, client_secret: str) -> str:
+    import time
+    now = time.time()
+    cached = _ads_token_cache.get(client_id)
+    if cached and cached["expires_at"] > now + 60:
+        return cached["token"]
+
     resp = requests.post("https://target.my.com/api/v2/oauth2/token.json", data={
         "grant_type": "client_credentials",
         "client_id": client_id,
         "client_secret": client_secret,
     })
     data = resp.json()
-    return data.get("access_token", "")
+    token = data.get("access_token", "")
+    expires_in = int(data.get("expires_in", 86400))
+    if token:
+        _ads_token_cache[client_id] = {"token": token, "expires_at": now + expires_in}
+    return token
 
 
 def get_ads_stats(client_id: str, client_secret: str) -> dict:
