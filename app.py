@@ -93,7 +93,7 @@ def ads_debug():
         return jsonify({"error": "no token after auto-recovery"})
     headers = {"Authorization": f"Bearer {token}"}
     campaigns = http.get("https://target.my.com/api/v2/campaigns.json",
-                         headers=headers, params={"_count": 250}).json()
+                         headers=headers, params={"limit": 250}).json()
     return jsonify({"token_ok": True, "campaigns_raw": campaigns})
 
 

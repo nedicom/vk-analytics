@@ -149,7 +149,7 @@ def get_ads_stats(client_id: str, client_secret: str) -> dict:
     headers = {"Authorization": f"Bearer {token}"}
 
     campaigns_resp = requests.get("https://target.my.com/api/v2/campaigns.json",
-                                   headers=headers, params={"_count": 250})
+                                   headers=headers, params={"limit": 250})
     campaigns_data = campaigns_resp.json()
     campaigns = campaigns_data.get("items", [])
     if not campaigns:
