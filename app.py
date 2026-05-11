@@ -86,29 +86,15 @@ def index():
 @app.route("/api/ads-debug")
 def ads_debug():
     from vk_client import get_ads_token
-    import requests as req
-    from datetime import datetime, timedelta
     if not ADS_CLIENT_ID or not ADS_CLIENT_SECRET:
-        return jsonify({"error": "env not set", "ADS_CLIENT_ID": bool(ADS_CLIENT_ID), "ADS_CLIENT_SECRET": bool(ADS_CLIENT_SECRET)})
-    raw = req.post("https://target.my.com/api/v2/oauth2/token.json", data={
-        "grant_type": "client_credentials",
-        "client_id": ADS_CLIENT_ID,
-        "client_secret": ADS_CLIENT_SECRET,
-    })
-    token_data = raw.json()
-    token = token_data.get("access_token", "")
+        return jsonify({"error": "env not set"})
+    token = get_ads_token(ADS_CLIENT_ID, ADS_CLIENT_SECRET)
     if not token:
-        return jsonify({"error": "no token", "response": token_data})
+        return jsonify({"error": "no token after auto-recovery"})
     headers = {"Authorization": f"Bearer {token}"}
-    campaigns = req.get("https://target.my.com/api/v2/campaigns.json",
-                        headers=headers, params={"_count": 250}).json()
-    date_to = datetime.now().strftime("%Y-%m-%d")
-    date_from = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")
-    campaign_ids = ",".join(str(c["id"]) for c in campaigns.get("items", [])[:10])
-    stats = req.get("https://target.my.com/api/v2/statistics/campaigns/day.json",
-                    headers=headers,
-                    params={"id": campaign_ids, "date_from": date_from, "date_to": date_to}).json()
-    return jsonify({"campaigns_count": campaigns.get("count"), "first_10_campaigns": campaigns.get("items", [])[:10], "stats_sample": stats.get("items", [])[:3]})
+    campaigns = http.get("https://target.my.com/api/v2/campaigns.json",
+                         headers=headers, params={"_count": 250}).json()
+    return jsonify({"token_ok": True, "campaigns_count": campaigns.get("count"), "campaigns": campaigns.get("items", [])[:5]})
 
 
 @app.route("/api/refresh")
