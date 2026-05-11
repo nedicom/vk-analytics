@@ -10,7 +10,6 @@ VK_API_VERSION = "5.199"
 def get_videos(group_id: str, token: str, count: int = 50) -> list[dict]:
     resp = requests.get("https://api.vk.com/method/video.get", params={
         "owner_id": f"-{group_id}",
-        "album_id": -16,
         "count": count,
         "access_token": token,
         "v": VK_API_VERSION,
