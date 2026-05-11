@@ -218,6 +218,24 @@
   </div>
   {% endif %}
 
+  {% if ads %}
+  <div class="stats-row" style="margin-top:-12px">
+    <div class="stat-card">
+      <div class="stat-label">Показы (7 дней)</div>
+      <div class="stat-value">{{ '{:,}'.format(ads.total_impressions).replace(',', ' ') }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Клики (7 дней)</div>
+      <div class="stat-value">{{ '{:,}'.format(ads.total_clicks).replace(',', ' ') }}</div>
+      <div class="stat-sub">CTR {{ ads.ctr }}%</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Расход (7 дней)</div>
+      <div class="stat-value">{{ ads.total_spent }} ₽</div>
+    </div>
+  </div>
+  {% endif %}
+
   <div class="toolbar">
     <button class="btn btn-secondary" id="btnRefresh" onclick="refreshData()">↻ Обновить данные</button>
     <button class="btn btn-primary" id="btnAnalyze" onclick="analyzeData()">✦ Анализ Claude</button>

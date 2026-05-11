@@ -55,6 +55,55 @@ def get_group_info(group_id: str, token: str) -> dict:
     return groups[0] if groups else {}
 
 
+def get_ads_token(client_id: str, client_secret: str) -> str:
+    resp = requests.post("https://target.my.com/api/v2/oauth2/token.json", data={
+        "grant_type": "client_credentials",
+        "client_id": client_id,
+        "client_secret": client_secret,
+    })
+    data = resp.json()
+    return data.get("access_token", "")
+
+
+def get_ads_stats(client_id: str, client_secret: str) -> dict:
+    token = get_ads_token(client_id, client_secret)
+    if not token:
+        return {}
+
+    headers = {"Authorization": f"Bearer {token}"}
+
+    campaigns_resp = requests.get("https://target.my.com/api/v2/campaigns.json", headers=headers)
+    campaigns_data = campaigns_resp.json()
+    campaigns = campaigns_data.get("items", [])
+    if not campaigns:
+        return {"campaigns": [], "total_impressions": 0, "total_clicks": 0, "total_spent": 0}
+
+    campaign_ids = ",".join(str(c["id"]) for c in campaigns[:20])
+    stats_resp = requests.get(
+        "https://target.my.com/api/v2/statistics/campaigns/day.json",
+        headers=headers,
+        params={"id": campaign_ids, "date_from": "last_7_days", "date_to": "today"},
+    )
+    stats_data = stats_resp.json()
+
+    total_impressions = 0
+    total_clicks = 0
+    total_spent = 0.0
+    for item in stats_data.get("items", []):
+        for row in item.get("rows", []):
+            total_impressions += row.get("shows", 0)
+            total_clicks += row.get("clicks", 0)
+            total_spent += float(row.get("spent", 0))
+
+    return {
+        "campaigns": [{"name": c.get("name", ""), "status": c.get("status", "")} for c in campaigns[:5]],
+        "total_impressions": total_impressions,
+        "total_clicks": total_clicks,
+        "total_spent": round(total_spent, 2),
+        "ctr": round(total_clicks / total_impressions * 100, 2) if total_impressions else 0,
+    }
+
+
 def get_group_stats(group_id: str, token: str) -> list[dict]:
     resp = requests.get("https://api.vk.com/method/stats.get", params={
         "group_id": group_id,

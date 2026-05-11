@@ -6,7 +6,7 @@ import requests as http
 from dotenv import load_dotenv, set_key
 from flask import Flask, jsonify, redirect, render_template, request
 
-from vk_client import get_group_info, get_group_stats, get_videos
+from vk_client import get_ads_stats, get_group_info, get_group_stats, get_videos
 
 load_dotenv()
 
@@ -20,6 +20,8 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 VK_APP_ID = os.getenv("VK_APP_ID", "54587433")
 VK_APP_SECRET = os.getenv("VK_APP_SECRET", "")
 VK_REDIRECT_URI = os.getenv("VK_REDIRECT_URI", "https://vk.nedicom.ru/callback")
+ADS_CLIENT_ID = os.getenv("ADS_VK_CLIENT_ID", "")
+ADS_CLIENT_SECRET = os.getenv("ADS_VK_SECRET", "")
 
 HISTORY_FILE = "history.json"
 
@@ -77,8 +79,9 @@ def index():
         error = str(e)
     group_info = get_group_info(VK_GROUP_ID, VK_TOKEN)
     stats = calc_stats(videos)
+    ads = get_ads_stats(ADS_CLIENT_ID, ADS_CLIENT_SECRET) if ADS_CLIENT_ID else {}
     history = load_history()
-    return render_template("index.html", videos=videos, history=history, error=error, group_info=group_info, stats=stats)
+    return render_template("index.html", videos=videos, history=history, error=error, group_info=group_info, stats=stats, ads=ads)
 
 
 @app.route("/api/refresh")
