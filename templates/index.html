@@ -28,6 +28,24 @@
 
     .container { max-width: 1300px; margin: 0 auto; padding: 24px 32px; }
 
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: #1a1a24;
+      border: 1px solid #2a2a3a;
+      border-radius: 10px;
+      padding: 16px 20px;
+    }
+
+    .stat-label { font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px; }
+    .stat-value { font-size: 22px; font-weight: 700; color: #fff; }
+    .stat-sub { font-size: 12px; color: #666; margin-top: 4px; }
+
     .toolbar {
       display: flex;
       gap: 12px;
@@ -169,6 +187,35 @@
 <div class="container">
   {% if error %}
   <div class="error-banner">⚠️ Ошибка загрузки данных: {{ error }}</div>
+  {% endif %}
+
+  {% if stats %}
+  <div class="stats-row">
+    {% if group_info.members_count %}
+    <div class="stat-card">
+      <div class="stat-label">Подписчики</div>
+      <div class="stat-value">{{ '{:,}'.format(group_info.members_count).replace(',', ' ') }}</div>
+    </div>
+    {% endif %}
+    <div class="stat-card">
+      <div class="stat-label">Просмотры ({{ stats.count }} клипов)</div>
+      <div class="stat-value">{{ '{:,}'.format(stats.total_views).replace(',', ' ') }}</div>
+      <div class="stat-sub">ср. {{ '{:,}'.format(stats.avg_views).replace(',', ' ') }} на клип</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Лайки</div>
+      <div class="stat-value">{{ '{:,}'.format(stats.total_likes).replace(',', ' ') }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Репосты</div>
+      <div class="stat-value">{{ '{:,}'.format(stats.total_reposts).replace(',', ' ') }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Лучший клип</div>
+      <div class="stat-value">{{ '{:,}'.format(stats.best_views).replace(',', ' ') }}</div>
+      <div class="stat-sub">{{ stats.best_title }}</div>
+    </div>
+  </div>
   {% endif %}
 
   <div class="toolbar">

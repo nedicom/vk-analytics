@@ -6,7 +6,7 @@ import requests as http
 from dotenv import load_dotenv, set_key
 from flask import Flask, jsonify, redirect, render_template, request
 
-from vk_client import get_group_stats, get_videos
+from vk_client import get_group_info, get_group_stats, get_videos
 
 load_dotenv()
 
@@ -47,6 +47,26 @@ def save_to_history(analysis: str, video_count: int):
         json.dump(history, f, ensure_ascii=False, indent=2)
 
 
+def calc_stats(videos: list) -> dict:
+    if not videos:
+        return {}
+    total_views = sum(v["views"] for v in videos)
+    total_likes = sum(v["likes"] for v in videos)
+    total_comments = sum(v["comments"] for v in videos)
+    total_reposts = sum(v["reposts"] for v in videos)
+    best = max(videos, key=lambda v: v["views"])
+    return {
+        "total_views": total_views,
+        "avg_views": total_views // len(videos),
+        "total_likes": total_likes,
+        "total_comments": total_comments,
+        "total_reposts": total_reposts,
+        "best_title": best["title"][:50],
+        "best_views": best["views"],
+        "count": len(videos),
+    }
+
+
 @app.route("/")
 def index():
     try:
@@ -55,8 +75,10 @@ def index():
     except Exception as e:
         videos = []
         error = str(e)
+    group_info = get_group_info(VK_GROUP_ID, VK_TOKEN)
+    stats = calc_stats(videos)
     history = load_history()
-    return render_template("index.html", videos=videos, history=history, error=error)
+    return render_template("index.html", videos=videos, history=history, error=error, group_info=group_info, stats=stats)
 
 
 @app.route("/api/refresh")

@@ -41,6 +41,20 @@ def get_videos(group_id: str, token: str, count: int = 50) -> list[dict]:
     return result
 
 
+def get_group_info(group_id: str, token: str) -> dict:
+    resp = requests.get("https://api.vk.com/method/groups.getById", params={
+        "group_id": group_id,
+        "fields": "members_count,activity,description",
+        "access_token": token,
+        "v": VK_API_VERSION,
+    })
+    data = resp.json()
+    if "error" in data:
+        return {}
+    groups = data.get("response", {}).get("groups", [])
+    return groups[0] if groups else {}
+
+
 def get_group_stats(group_id: str, token: str) -> list[dict]:
     resp = requests.get("https://api.vk.com/method/stats.get", params={
         "group_id": group_id,
