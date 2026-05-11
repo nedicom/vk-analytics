@@ -16,8 +16,6 @@ VK_TOKEN = os.getenv("VK_TOKEN")
 VK_GROUP_ID = os.getenv("VK_GROUP_ID")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 
-claude = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-
 HISTORY_FILE = "history.json"
 
 SYSTEM_PROMPT = """Ты опытный аналитик контента ВКонтакте. Помогаешь автору видеоканала принимать решения на основе данных: что снимать, когда публиковать, как увеличить охват и продажи.
@@ -67,6 +65,9 @@ def refresh():
 
 @app.route("/api/analyze", methods=["POST"])
 def analyze():
+    if not ANTHROPIC_API_KEY:
+        return jsonify({"ok": False, "error": "API ключ Claude не настроен. Добавьте ANTHROPIC_API_KEY в .env"}), 503
+
     try:
         videos = get_videos(VK_GROUP_ID, VK_TOKEN, count=30)
     except Exception as e:
@@ -89,6 +90,7 @@ def analyze():
         "Дай конкретные рекомендации для роста просмотров и продаж."
     )
 
+    claude = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     response = claude.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=1500,
