@@ -1,7 +1,7 @@
 from __future__ import annotations
 import requests
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 VK_API_VERSION = "5.199"
@@ -79,12 +79,16 @@ def get_ads_stats(client_id: str, client_secret: str) -> dict:
         return {"campaigns": [], "total_impressions": 0, "total_clicks": 0, "total_spent": 0}
 
     campaign_ids = ",".join(str(c["id"]) for c in campaigns[:20])
+    date_to = datetime.now().strftime("%Y-%m-%d")
+    date_from = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
     stats_resp = requests.get(
         "https://target.my.com/api/v2/statistics/campaigns/day.json",
         headers=headers,
-        params={"id": campaign_ids, "date_from": "last_7_days", "date_to": "today"},
+        params={"id": campaign_ids, "date_from": date_from, "date_to": date_to},
     )
     stats_data = stats_resp.json()
+    print("ADS campaigns:", campaigns_data)
+    print("ADS stats:", stats_data)
 
     total_impressions = 0
     total_clicks = 0
