@@ -72,32 +72,31 @@ def get_ads_stats(client_id: str, client_secret: str) -> dict:
 
     headers = {"Authorization": f"Bearer {token}"}
 
-    campaigns_resp = requests.get("https://target.my.com/api/v2/campaigns.json", headers=headers)
+    campaigns_resp = requests.get("https://target.my.com/api/v2/campaigns.json",
+                                   headers=headers, params={"_count": 250})
     campaigns_data = campaigns_resp.json()
     campaigns = campaigns_data.get("items", [])
     if not campaigns:
         return {"campaigns": [], "total_impressions": 0, "total_clicks": 0, "total_spent": 0}
 
-    campaign_ids = ",".join(str(c["id"]) for c in campaigns[:20])
+    campaign_ids = ",".join(str(c["id"]) for c in campaigns)
     date_to = datetime.now().strftime("%Y-%m-%d")
-    date_from = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+    date_from = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
     stats_resp = requests.get(
         "https://target.my.com/api/v2/statistics/campaigns/day.json",
         headers=headers,
         params={"id": campaign_ids, "date_from": date_from, "date_to": date_to},
     )
     stats_data = stats_resp.json()
-    print("ADS campaigns:", campaigns_data)
-    print("ADS stats:", stats_data)
-
     total_impressions = 0
     total_clicks = 0
     total_spent = 0.0
     for item in stats_data.get("items", []):
         for row in item.get("rows", []):
-            total_impressions += row.get("shows", 0)
-            total_clicks += row.get("clicks", 0)
-            total_spent += float(row.get("spent", 0))
+            base = row.get("base", {})
+            total_impressions += base.get("shows", 0)
+            total_clicks += base.get("clicks", 0)
+            total_spent += float(base.get("spent", 0) or 0)
 
     return {
         "campaigns": [{"name": c.get("name", ""), "status": c.get("status", "")} for c in campaigns[:5]],

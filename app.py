@@ -10,7 +10,6 @@ from vk_client import get_ads_stats, get_group_info, get_group_stats, get_videos
 
 load_dotenv()
 
-print("TOKEN:", os.getenv("VK_TOKEN", "")[:15], "| GROUP:", os.getenv("VK_GROUP_ID"))
 
 app = Flask(__name__)
 
