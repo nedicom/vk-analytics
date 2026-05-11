@@ -168,12 +168,15 @@ def analyze():
 
     import anthropic
     claude = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-    response = claude.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=1500,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": user_message}],
-    )
+    try:
+        response = claude.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=1500,
+            system=SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user_message}],
+        )
+    except anthropic.APIError as e:
+        return jsonify({"ok": False, "error": f"Anthropic API: {e.status_code} — {e.message}"}), 200
 
     analysis = response.content[0].text
     save_to_history(analysis, len(videos))
