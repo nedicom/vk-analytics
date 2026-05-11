@@ -8,9 +8,10 @@ VK_API_VERSION = "5.199"
 
 
 def get_videos(group_id: str, token: str, count: int = 50) -> list[dict]:
-    resp = requests.get("https://api.vk.com/method/video.get", params={
+    resp = requests.get("https://api.vk.com/method/wall.get", params={
         "owner_id": f"-{group_id}",
         "count": count,
+        "filter": "owner",
         "access_token": token,
         "v": VK_API_VERSION,
     })
@@ -18,22 +19,25 @@ def get_videos(group_id: str, token: str, count: int = 50) -> list[dict]:
     if "error" in data:
         raise Exception(data["error"]["error_msg"])
 
-    items = data.get("response", {}).get("items", [])
     result = []
-    for v in items:
-        likes = v.get("likes", {})
-        reposts = v.get("reposts", {})
-        result.append({
-            "id": v["id"],
-            "title": v.get("title", ""),
-            "views": v.get("views", 0),
-            "likes": likes.get("count", 0) if isinstance(likes, dict) else likes,
-            "comments": v.get("comments", 0),
-            "reposts": reposts.get("count", 0) if isinstance(reposts, dict) else 0,
-            "duration": v.get("duration", 0),
-            "date": datetime.fromtimestamp(v["date"]).strftime("%d.%m.%Y") if v.get("date") else "",
-            "description": (v.get("description") or "")[:300],
-        })
+    for post in data.get("response", {}).get("items", []):
+        for att in post.get("attachments", []):
+            if att.get("type") != "video":
+                continue
+            v = att["video"]
+            if v.get("type") != "short_video":
+                continue
+            result.append({
+                "id": v["id"],
+                "title": v.get("description") or v.get("title", ""),
+                "views": v.get("views", 0),
+                "likes": post.get("likes", {}).get("count", 0),
+                "comments": post.get("comments", {}).get("count", 0),
+                "reposts": post.get("reposts", {}).get("count", 0),
+                "duration": v.get("duration", 0),
+                "date": datetime.fromtimestamp(post["date"]).strftime("%d.%m.%Y") if post.get("date") else "",
+                "description": "",
+            })
     return result
 
 

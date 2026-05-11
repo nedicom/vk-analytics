@@ -1,0 +1,14 @@
+[Unit]
+Description=VK Analytics Dashboard
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=/home/forge/vk.nedicom.ru
+ExecStart=/usr/bin/python3 app.py
+Restart=always
+RestartSec=5
+EnvironmentFile=/home/forge/vk.nedicom.ru/.env
+
+[Install]
+WantedBy=multi-user.target
