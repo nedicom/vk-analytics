@@ -172,15 +172,30 @@ def get_campaigns():
     if not token:
         return jsonify([])
     headers = {"Authorization": f"Bearer {token}"}
-    # Пробуем packages — это уровень кампаний над группами
-    packages = http.get("https://target.my.com/api/v2/packages.json",
+    # Пробуем ad_plans — верхний уровень в иерархии myTarget
+    for endpoint in ["ad_plans", "packages"]:
+        data = http.get(f"https://target.my.com/api/v2/{endpoint}.json",
                         headers=headers, params={"limit": 250}).json()
-    if packages.get("items"):
-        return jsonify([{"id": p["id"], "name": p.get("name", f"id{p['id']}")} for p in packages["items"]])
-    # Fallback на campaigns
+        items = data.get("items", [])
+        if items and items[0].get("name", "").startswith("Группа") is False:
+            return jsonify([{"id": i["id"], "name": i.get("name", f"id{i['id']}")} for i in items])
+    # Fallback — campaigns как есть
     data = http.get("https://target.my.com/api/v2/campaigns.json",
                     headers=headers, params={"limit": 250}).json()
     return jsonify([{"id": c["id"], "name": c["name"]} for c in data.get("items", [])])
+
+
+@app.route("/api/ads-debug")
+@login_required
+def ads_debug():
+    from vk_client import get_ads_token
+    token = get_ads_token(ADS_CLIENT_ID, ADS_CLIENT_SECRET)
+    headers = {"Authorization": f"Bearer {token}"}
+    results = {}
+    for ep in ["ad_plans", "packages", "campaigns"]:
+        r = http.get(f"https://target.my.com/api/v2/{ep}.json", headers=headers, params={"limit": 3})
+        results[ep] = {"status": r.status_code, "first_items": r.json().get("items", [])[:2]}
+    return jsonify(results)
 
 
 @app.route("/api/mapping/<video_id>", methods=["POST"])
