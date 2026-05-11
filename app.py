@@ -81,7 +81,6 @@ def save_to_history(analysis: str, video_count: int):
         "analysis": analysis,
         "video_count": video_count,
     })
-    history = history[-30:]  # хранить последние 30 анализов
     with open(HISTORY_FILE, "w", encoding="utf-8") as f:
         json.dump(history, f, ensure_ascii=False, indent=2)
 
