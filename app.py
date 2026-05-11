@@ -27,6 +27,19 @@ DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "")
 
 HISTORY_FILE = "history.json"
 SCRIPTS_FILE = "video_scripts.json"
+MAPPINGS_FILE = "campaign_mappings.json"
+
+
+def load_mappings() -> dict:
+    if os.path.exists(MAPPINGS_FILE):
+        with open(MAPPINGS_FILE, encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+
+def save_mappings(mappings: dict):
+    with open(MAPPINGS_FILE, "w", encoding="utf-8") as f:
+        json.dump(mappings, f, ensure_ascii=False, indent=2)
 
 
 def load_scripts() -> dict:
@@ -124,9 +137,10 @@ def index():
     ads = get_ads_stats(ADS_CLIENT_ID, ADS_CLIENT_SECRET) if ADS_CLIENT_ID else {}
     history = load_history()
     scripts = load_scripts()
+    mappings = load_mappings()
     comments_stats = get_comments_stats(VK_GROUP_ID, VK_TOKEN, videos)
-    ads_per_video = get_ads_stats_per_video(ADS_CLIENT_ID, ADS_CLIENT_SECRET, VK_GROUP_ID) if ADS_CLIENT_ID else {}
-    return render_template("index.html", videos=videos, history=history, error=error, group_info=group_info, stats=stats, ads=ads, scripts=scripts, comments_stats=comments_stats, ads_per_video=ads_per_video)
+    ads_per_video = get_ads_stats_per_video(ADS_CLIENT_ID, ADS_CLIENT_SECRET, mappings) if ADS_CLIENT_ID else {}
+    return render_template("index.html", videos=videos, history=history, error=error, group_info=group_info, stats=stats, ads=ads, scripts=scripts, comments_stats=comments_stats, ads_per_video=ads_per_video, mappings=mappings)
 
 
 @app.route("/api/scripts", methods=["GET"])
@@ -148,28 +162,33 @@ def save_script(video_id):
     return jsonify({"ok": True})
 
 
-@app.route("/api/ads-debug")
+@app.route("/api/campaigns")
 @login_required
-def ads_debug():
+def get_campaigns():
     from vk_client import get_ads_token
     if not ADS_CLIENT_ID or not ADS_CLIENT_SECRET:
-        return jsonify({"error": "env not set"})
+        return jsonify([])
     token = get_ads_token(ADS_CLIENT_ID, ADS_CLIENT_SECRET)
     if not token:
-        return jsonify({"error": "no token after auto-recovery"})
+        return jsonify([])
     headers = {"Authorization": f"Bearer {token}"}
-    banners_resp = http.get("https://target.my.com/api/v2/banners.json",
-                            headers=headers, params={"limit": 1})
-    banners_data = banners_resp.json()
-    first = banners_data.get("items", [{}])[0]
-    ad_group_id = first.get("ad_group_id")
-    campaign_id = first.get("campaign_id")
-    ad_group, campaign = {}, {}
-    if ad_group_id:
-        ad_group = http.get(f"https://target.my.com/api/v2/ad_groups/{ad_group_id}.json", headers=headers).json()
+    data = http.get("https://target.my.com/api/v2/campaigns.json",
+                    headers=headers, params={"limit": 250}).json()
+    campaigns = [{"id": c["id"], "name": c["name"]} for c in data.get("items", [])]
+    return jsonify(campaigns)
+
+
+@app.route("/api/mapping/<video_id>", methods=["POST"])
+@login_required
+def save_mapping(video_id):
+    campaign_id = request.json.get("campaign_id")
+    mappings = load_mappings()
     if campaign_id:
-        campaign = http.get(f"https://target.my.com/api/v2/campaigns/{campaign_id}.json", headers=headers).json()
-    return jsonify({"token_ok": True, "ad_group": ad_group, "campaign": campaign})
+        mappings[video_id] = int(campaign_id)
+    else:
+        mappings.pop(video_id, None)
+    save_mappings(mappings)
+    return jsonify({"ok": True})
 
 
 @app.route("/api/refresh")

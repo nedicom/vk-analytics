@@ -221,63 +221,50 @@ def get_comments_stats(group_id: str, token: str, videos: list[dict]) -> dict:
     return result
 
 
-def get_ads_stats_per_video(client_id: str, client_secret: str, group_id: str) -> dict:
-    """Возвращает статистику рекламы по video_id на основе URL баннеров."""
+def get_ads_stats_per_video(client_id: str, client_secret: str, mappings: dict) -> dict:
+    """Возвращает статистику рекламы по video_id на основе ручных маппингов video_id→campaign_id."""
+    if not mappings:
+        return {}
     token = get_ads_token(client_id, client_secret)
     if not token:
         return {}
 
     headers = {"Authorization": f"Bearer {token}"}
-
-    # Получаем все объявления (баннеры)
-    banners_resp = requests.get("https://target.my.com/api/v2/banners.json",
-                                headers=headers, params={"limit": 250})
-    banners_data = banners_resp.json()
-    if "error" in banners_data:
-        return {}
-
-    # Сопоставляем баннер → video_id по URL
-    banner_to_video: dict[int, str] = {}
-    for b in banners_data.get("items", []):
-        url = b.get("url", "") or ""
-        # URL вида https://vk.com/video-72406118_XXXXX
-        if f"video-{group_id}_" in url:
-            vid = url.split(f"video-{group_id}_")[-1].split("?")[0].strip()
-            if vid.isdigit():
-                banner_to_video[b["id"]] = vid
-
-    if not banner_to_video:
-        return {}
-
-    # Статистика по баннерам
-    banner_ids = ",".join(str(bid) for bid in banner_to_video)
     date_to = datetime.now().strftime("%Y-%m-%d")
-    date_from = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")
+    date_from = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
+
+    # Уникальные campaign_id из маппингов
+    campaign_ids = list(set(mappings.values()))
     stats_resp = requests.get(
-        "https://target.my.com/api/v2/statistics/banners/day.json",
+        "https://target.my.com/api/v2/statistics/campaigns/day.json",
         headers=headers,
-        params={"id": banner_ids, "date_from": date_from, "date_to": date_to},
+        params={"id": ",".join(str(c) for c in campaign_ids), "date_from": date_from, "date_to": date_to},
     )
     stats_data = stats_resp.json()
 
-    video_stats: dict[str, dict] = {}
+    # Суммируем статистику по campaign_id
+    campaign_stats: dict[int, dict] = {}
     for item in stats_data.get("items", []):
-        bid = item.get("id")
-        vid = banner_to_video.get(bid)
-        if not vid:
-            continue
-        if vid not in video_stats:
-            video_stats[vid] = {"impressions": 0, "clicks": 0, "spent": 0.0}
+        cid = item.get("id")
+        if cid not in campaign_stats:
+            campaign_stats[cid] = {"impressions": 0, "clicks": 0, "spent": 0.0}
         for row in item.get("rows", []):
             base = row.get("base", {})
-            video_stats[vid]["impressions"] += base.get("shows", 0)
-            video_stats[vid]["clicks"] += base.get("clicks", 0)
-            video_stats[vid]["spent"] += float(base.get("spent", 0) or 0)
+            campaign_stats[cid]["impressions"] += base.get("shows", 0)
+            campaign_stats[cid]["clicks"] += base.get("clicks", 0)
+            campaign_stats[cid]["spent"] += float(base.get("spent", 0) or 0)
 
-    for vid in video_stats:
-        s = video_stats[vid]
-        s["spent"] = round(s["spent"], 2)
-        s["ctr"] = round(s["clicks"] / s["impressions"] * 100, 2) if s["impressions"] else 0
+    # Сопоставляем video_id → статистика кампании
+    video_stats: dict[str, dict] = {}
+    for vid, cid in mappings.items():
+        s = campaign_stats.get(cid, {})
+        if s:
+            video_stats[vid] = {
+                "impressions": s["impressions"],
+                "clicks": s["clicks"],
+                "spent": round(s["spent"], 2),
+                "ctr": round(s["clicks"] / s["impressions"] * 100, 2) if s["impressions"] else 0,
+            }
 
     return video_stats
 

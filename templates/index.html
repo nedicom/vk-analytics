@@ -328,8 +328,12 @@
                 {% if av %}
                   👁 {{ '{:,}'.format(av.impressions).replace(',', ' ') }}<br>
                   🖱 {{ av.clicks }} ({{ av.ctr }}%)<br>
-                  💰 {{ av.spent }} ₽
-                {% else %}—{% endif %}
+                  💰 {{ av.spent }} ₽<br>
+                {% endif %}
+                <select id="camp-{{ v.id }}" onchange="saveMapping('{{ v.id }}', this.value)"
+                  style="margin-top:4px;background:#0f0f13;border:1px solid #2a2a3a;border-radius:4px;color:#888;font-size:11px;padding:2px 4px;width:100%;">
+                  <option value="">— кампания —</option>
+                </select>
               </td>
               <td>
                 <button class="btn-script {% if scripts.get(v.id|string) %}has-script{% endif %}"
@@ -406,6 +410,35 @@
     showAnalysis(text.replace(/\\n/g, '\n'));
     document.getElementById('analysisBox').scrollIntoView({ behavior: 'smooth' });
   }
+
+  const mappings = {{ mappings | tojson }};
+
+  async function loadCampaigns() {
+    const r = await fetch('/api/campaigns');
+    const campaigns = await r.json();
+    document.querySelectorAll('select[id^="camp-"]').forEach(sel => {
+      const videoId = sel.id.replace('camp-', '');
+      const mapped = mappings[videoId];
+      campaigns.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = c.name;
+        if (c.id == mapped) opt.selected = true;
+        sel.appendChild(opt);
+      });
+    });
+  }
+
+  async function saveMapping(videoId, campaignId) {
+    await fetch('/api/mapping/' + videoId, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({campaign_id: campaignId || null})
+    });
+    location.reload();
+  }
+
+  loadCampaigns();
 
   function toggleScript(videoId) {
     const row = document.getElementById('script-row-' + videoId);
