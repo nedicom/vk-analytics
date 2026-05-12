@@ -577,7 +577,7 @@
         setStatus('Ошибка: ' + data.error);
       }
     } catch (e) {
-      setStatus('Сетевая ошибка');
+      setStatus('Нет связи с сервером — проверьте интернет.');
     } finally {
       setLoading(false);
     }
@@ -597,10 +597,10 @@
         showAnalysis(data.analysis, data.title, data.is_question);
         setStatus('Готово');
       } else {
-        setStatus('Ошибка: ' + data.error);
+        setStatus('⚠️ ' + data.error);
       }
     } catch (e) {
-      setStatus('Сетевая ошибка');
+      setStatus('Нет связи с сервером — проверьте интернет.');
     } finally {
       setLoading(false);
     }

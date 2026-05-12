@@ -141,7 +141,15 @@ def index():
         error = None
     except Exception as e:
         videos = []
-        error = str(e)
+        msg = str(e).lower()
+        if "internal server error" in msg or "unknown error" in msg:
+            error = "ВКонтакте временно не отвечает — обновите страницу через минуту."
+        elif "invalid token" in msg or "access_token" in msg or "token has expired" in msg:
+            error = "Токен ВКонтакте недействителен — обратитесь к разработчику."
+        elif "too many requests" in msg or "rate limit" in msg:
+            error = "Слишком много запросов к ВК — подождите минуту и обновите страницу."
+        else:
+            error = f"Ошибка ВКонтакте: {e} — обратитесь к разработчику если ошибка повторяется."
     group_info = get_group_info(VK_GROUP_ID, VK_TOKEN)
     stats = calc_stats(videos)
     ads = get_ads_stats(ADS_CLIENT_ID, ADS_CLIENT_SECRET) if ADS_CLIENT_ID else {}
@@ -275,7 +283,20 @@ def analyze():
             messages=[{"role": "user", "content": user_message}],
         )
     except anthropic.APIError as e:
-        return jsonify({"ok": False, "error": f"Anthropic API: {e.status_code} — {e.message}"}), 200
+        code = e.status_code
+        if code == 529:
+            msg = "Серверы Claude перегружены — подождите 1-2 минуты и попробуйте снова."
+        elif code == 503:
+            msg = "Сервис Claude временно недоступен — попробуйте через несколько минут."
+        elif code == 401:
+            msg = "Неверный API ключ Claude — обратитесь к разработчику."
+        elif code == 403:
+            msg = "Доступ к Claude заблокирован (возможно, проблема с прокси) — обратитесь к разработчику."
+        elif code == 429:
+            msg = "Превышен лимит запросов к Claude — подождите минуту и попробуйте снова."
+        else:
+            msg = f"Ошибка Claude ({code}) — обратитесь к разработчику."
+        return jsonify({"ok": False, "error": msg}), 200
 
     analysis = response.content[0].text
     title = question.strip() if question.strip() else _extract_title(analysis)
