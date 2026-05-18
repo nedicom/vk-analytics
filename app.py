@@ -1,15 +1,24 @@
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 
-import requests as http
+import requests as _requests_lib
+
+_http = _requests_lib.Session()
+_http.trust_env = False
+_app_proxy = None  # будет задан после load_dotenv
+http = _http
 from dotenv import load_dotenv, set_key
 from flask import Flask, jsonify, redirect, render_template, request, session
 
-from vk_client import get_ads_stats, get_ads_stats_per_video, get_comments_stats, get_group_info, get_group_stats, get_videos
+from vk_client import get_ads_stats, get_ads_stats_per_video, get_comments_stats, get_detailed_campaign_stats, get_group_info, get_group_stats, get_videos
 
 load_dotenv()
+
+_env_proxy = os.getenv("HTTPS_PROXY") or os.getenv("ALL_PROXY")
+if _env_proxy:
+    _http.proxies = {"https": _env_proxy, "http": _env_proxy}
 
 
 app = Flask(__name__)
@@ -28,6 +37,38 @@ DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "")
 HISTORY_FILE = "history.json"
 SCRIPTS_FILE = "video_scripts.json"
 MAPPINGS_FILE = "campaign_mappings.json"
+MEMBER_HISTORY_FILE = "member_count_history.json"
+
+
+def track_member_count(count: int):
+    today = datetime.now().strftime("%Y-%m-%d")
+    history = {}
+    if os.path.exists(MEMBER_HISTORY_FILE):
+        with open(MEMBER_HISTORY_FILE, encoding="utf-8") as f:
+            history = json.load(f)
+    history[today] = count
+    cutoff = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")
+    history = {k: v for k, v in history.items() if k >= cutoff}
+    with open(MEMBER_HISTORY_FILE, "w", encoding="utf-8") as f:
+        json.dump(history, f)
+
+
+def get_member_count_delta() -> dict:
+    if not os.path.exists(MEMBER_HISTORY_FILE):
+        return {}
+    with open(MEMBER_HISTORY_FILE, encoding="utf-8") as f:
+        history = json.load(f)
+    if len(history) < 2:
+        return {}
+    sorted_dates = sorted(history.keys())
+    current_date = sorted_dates[-1]
+    current = history[current_date]
+    cutoff = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+    past_dates = [d for d in sorted_dates[:-1] if d <= cutoff]
+    past_date = past_dates[-1] if past_dates else sorted_dates[0]
+    past = history[past_date]
+    period = (datetime.strptime(current_date, "%Y-%m-%d") - datetime.strptime(past_date, "%Y-%m-%d")).days
+    return {"delta": current - past, "period_days": period}
 
 
 def load_mappings() -> dict:
@@ -64,7 +105,54 @@ def login_required(f):
 
 SYSTEM_PROMPT = """Ты опытный аналитик контента ВКонтакте. Помогаешь автору видеоканала принимать решения на основе данных: что снимать, когда публиковать, как увеличить охват и продажи.
 
-Стиль ответа: конкретно, с цифрами из данных, без воды. Сначала коротко — что работает, потом — 3-5 чётких рекомендаций с обоснованием."""
+Стиль ответа: конкретно, с цифрами из данных, без воды. Сначала коротко — что работает, потом — 3-5 чётких рекомендаций с обоснованием.
+
+Если в данных есть рекламная статистика по кампаниям — обязательно используй её: анализируй эффективность рекламы (CPM, CPC, CTR, тренды), сопоставляй с органическими показателями видео, выявляй какие кампании дают лучший результат и почему."""
+
+
+def _format_campaign_stats_for_claude(detailed: dict, mappings: dict, videos: list) -> str:
+    """Форматирует детальную статистику кампаний для передачи Claude."""
+    if not detailed:
+        return ""
+
+    vid_by_id = {str(v["id"]): v for v in videos}
+    lines = ["\n\n=== ДЕТАЛЬНАЯ СТАТИСТИКА РЕКЛАМНЫХ КАМПАНИЙ ==="]
+
+    for video_id, plan_id in mappings.items():
+        stats = detailed.get(plan_id)
+        if not stats:
+            continue
+        video = vid_by_id.get(str(video_id), {})
+        video_title = video.get("title", f"Видео {video_id}")[:60]
+
+        lines.append(f"\n📹 КЛИП: «{video_title}»")
+        lines.append(f"📣 Кампания: {stats['name']} (ID {plan_id})")
+
+        budget_info = []
+        if stats["total_budget"]:
+            budget_info.append(f"общий бюджет {stats['total_budget']} ₽")
+        if stats["budget_left"] is not None:
+            budget_info.append(f"остаток {stats['budget_left']} ₽")
+        if budget_info:
+            lines.append(f"   Бюджет: {' | '.join(budget_info)}")
+
+        lines.append(
+            f"   Итого за 30 дн.: {stats['total_shows']:,} показов | "
+            f"{stats['total_clicks']:,} кликов | CTR {stats['total_ctr']}% | "
+            f"CPM {stats['avg_cpm']} ₽ | CPC {stats['avg_cpc']} ₽ | "
+            f"Расход {stats['spent']} ₽"
+        )
+        lines.append(f"   Тренд CTR: {stats['ctr_trend']} | Активных дней: {stats['active_days']}")
+
+        if stats["daily"]:
+            lines.append("   По дням (последние 14):")
+            for d in stats["daily"][-14:]:
+                lines.append(
+                    f"     {d['date']}: {d['shows']:,} пок. | {d['clicks']} кл. | "
+                    f"CTR {d['ctr']}% | CPM {d['cpm']} ₽ | CPC {d['cpc']} ₽ | {d['spent']} ₽"
+                )
+
+    return "\n".join(lines)
 
 
 def load_history() -> list:
@@ -151,6 +239,9 @@ def index():
         else:
             error = f"Ошибка ВКонтакте: {e} — обратитесь к разработчику если ошибка повторяется."
     group_info = get_group_info(VK_GROUP_ID, VK_TOKEN)
+    if group_info.get("members_count"):
+        track_member_count(group_info["members_count"])
+    member_delta = get_member_count_delta()
     stats = calc_stats(videos)
     ads = get_ads_stats(ADS_CLIENT_ID, ADS_CLIENT_SECRET) if ADS_CLIENT_ID else {}
     history = load_history()
@@ -158,7 +249,7 @@ def index():
     mappings = load_mappings()
     comments_stats = get_comments_stats(VK_GROUP_ID, VK_TOKEN, videos)
     ads_per_video = get_ads_stats_per_video(ADS_CLIENT_ID, ADS_CLIENT_SECRET, mappings) if ADS_CLIENT_ID else {}
-    return render_template("index.html", videos=videos, history=history, error=error, group_info=group_info, stats=stats, ads=ads, scripts=scripts, comments_stats=comments_stats, ads_per_video=ads_per_video, mappings=mappings)
+    return render_template("index.html", videos=videos, history=history, error=error, group_info=group_info, stats=stats, ads=ads, scripts=scripts, comments_stats=comments_stats, ads_per_video=ads_per_video, mappings=mappings, member_delta=member_delta)
 
 
 @app.route("/api/scripts", methods=["GET"])
@@ -238,37 +329,62 @@ def analyze():
     if not ANTHROPIC_API_KEY:
         return jsonify({"ok": False, "error": "API ключ Claude не настроен. Добавьте ANTHROPIC_API_KEY в .env"}), 503
 
-    try:
-        videos = get_videos(VK_GROUP_ID, VK_TOKEN, count=30)
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+    body = request.json or {}
+    question = body.get("question", "").strip()
+    messages_history = body.get("messages", [])
 
-    past = load_history()
-    past_context = ""
-    if past:
-        last = past[-1]
-        past_context = f"\n\nПрошлый анализ ({last['date']}):\n{last['analysis'][:800]}\n"
+    if not messages_history:
+        # Новый диалог — собираем контекст видео
+        try:
+            videos = get_videos(VK_GROUP_ID, VK_TOKEN, count=30)
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)}), 500
 
-    question = (request.json or {}).get("question", "").strip()
-    scripts = load_scripts()
-    videos_text = "\n".join([
-        f"• «{v['title']}» | {v['date']} | 👁 {v['views']} | ❤️ {v['likes']} | 💬 {v['comments']} | ↗️ {v['reposts']} | ⏱ {v['duration']}с"
-        + (f"\n  Сценарий: {scripts[str(v['id'])]}" if str(v['id']) in scripts else "")
-        for v in videos
-    ])
+        past = load_history()
+        past_context = ""
+        if past:
+            last = past[-1]
+            past_context = f"\n\nПрошлый анализ ({last['date']}):\n{last['analysis'][:800]}\n"
 
-    if question:
-        user_message = (
-            f"Данные последних {len(videos)} видео группы:{past_context}\n\n{videos_text}\n\n"
-            f"Вопрос: {question}"
-        )
+        scripts = load_scripts()
+        mappings = load_mappings()
+        videos_text = "\n".join([
+            f"• «{v['title']}» | {v['date']} | 👁 {v['views']} | ❤️ {v['likes']} | 💬 {v['comments']} | ↗️ {v['reposts']} | ⏱ {v['duration']}с"
+            + (f"\n  Сценарий: {scripts[str(v['id'])]}" if str(v['id']) in scripts else "")
+            for v in videos
+        ])
+
+        # Детальная рекламная статистика по привязанным кампаниям
+        campaign_context = ""
+        if ADS_CLIENT_ID and mappings:
+            try:
+                plan_ids = list(set(int(v) for v in mappings.values()))
+                detailed = get_detailed_campaign_stats(ADS_CLIENT_ID, ADS_CLIENT_SECRET, plan_ids)
+                campaign_context = _format_campaign_stats_for_claude(detailed, mappings, videos)
+            except Exception:
+                pass
+
+        if question:
+            user_content = (
+                f"Данные последних {len(videos)} видео группы:{past_context}\n\n{videos_text}"
+                f"{campaign_context}\n\nВопрос: {question}"
+            )
+        else:
+            user_content = (
+                f"Статистика последних {len(videos)} видео группы:{past_context}\n\n{videos_text}"
+                f"{campaign_context}\n\n"
+                "Проанализируй результаты с учётом сценариев там где они есть. "
+                "Что работает лучше всего? Какие темы и форматы дают больший охват? "
+                "Дай конкретные рекомендации для роста просмотров и продаж."
+            )
+        messages = [{"role": "user", "content": user_content}]
+        video_count = len(videos)
     else:
-        user_message = (
-            f"Статистика последних {len(videos)} видео группы:{past_context}\n\n{videos_text}\n\n"
-            "Проанализируй результаты с учётом сценариев там где они есть. "
-            "Что работает лучше всего? Какие темы и форматы дают больший охват? "
-            "Дай конкретные рекомендации для роста просмотров и продаж."
-        )
+        # Продолжение диалога — добавляем новое сообщение пользователя
+        messages = list(messages_history)
+        if question:
+            messages.append({"role": "user", "content": question})
+        video_count = 0
 
     import anthropic
     import httpx
@@ -280,7 +396,7 @@ def analyze():
             model="claude-sonnet-4-6",
             max_tokens=1500,
             system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user_message}],
+            messages=messages,
         )
     except anthropic.APIError as e:
         code = e.status_code
@@ -299,9 +415,21 @@ def analyze():
         return jsonify({"ok": False, "error": msg}), 200
 
     analysis = response.content[0].text
-    title = question.strip() if question.strip() else _extract_title(analysis)
-    save_to_history(analysis, len(videos), question)
-    return jsonify({"ok": True, "analysis": analysis, "title": title, "is_question": bool(question.strip())})
+    messages.append({"role": "assistant", "content": analysis})
+
+    if not messages_history:
+        title = question.strip() if question.strip() else _extract_title(analysis)
+        save_to_history(analysis, video_count, question)
+    else:
+        title = question
+
+    return jsonify({
+        "ok": True,
+        "analysis": analysis,
+        "messages": messages,
+        "title": title,
+        "is_question": bool(question),
+    })
 
 
 @app.route("/auth")

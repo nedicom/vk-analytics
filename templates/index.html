@@ -29,22 +29,23 @@
     .container { max-width: 1300px; margin: 0 auto; padding: 24px 32px; }
 
     .stats-row {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-      gap: 12px;
-      margin-bottom: 24px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 16px;
     }
 
     .stat-card {
       background: #1a1a24;
       border: 1px solid #2a2a3a;
-      border-radius: 10px;
-      padding: 16px 20px;
+      border-radius: 8px;
+      padding: 10px 16px;
+      flex: 1 1 120px;
     }
 
-    .stat-label { font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px; }
-    .stat-value { font-size: 22px; font-weight: 700; color: #fff; }
-    .stat-sub { font-size: 12px; color: #666; margin-top: 4px; }
+    .stat-label { font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: 0.7px; margin-bottom: 3px; }
+    .stat-value { font-size: 17px; font-weight: 700; color: #fff; }
+    .stat-sub { font-size: 11px; color: #666; margin-top: 2px; }
 
     .toolbar {
       display: flex;
@@ -119,24 +120,99 @@
 
     .sidebar { display: flex; flex-direction: column; gap: 20px; }
 
-    .analysis-box {
-      padding: 20px;
-      min-height: 200px;
-    }
-
     .analysis-placeholder {
       color: #444;
       font-size: 14px;
       text-align: center;
-      margin-top: 60px;
+      padding: 60px 20px 40px;
     }
 
-    .analysis-text {
-      font-size: 14px;
-      line-height: 1.7;
-      color: #ccc;
-      white-space: pre-wrap;
+    .chat-container {
+      padding: 16px 20px;
+      min-height: 160px;
+      max-height: 380px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
     }
+
+    .chat-bubble {
+      max-width: 92%;
+      padding: 10px 14px;
+      font-size: 13px;
+      line-height: 1.7;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .chat-bubble.ai {
+      background: #1e1e2c;
+      color: #ccc;
+      border-radius: 4px 12px 12px 12px;
+      align-self: flex-start;
+    }
+
+    .chat-bubble.user {
+      background: #1a2d4a;
+      color: #c8d8f0;
+      border-radius: 12px 4px 12px 12px;
+      align-self: flex-end;
+    }
+
+    .chat-thinking {
+      align-self: flex-start;
+      color: #555;
+      font-size: 13px;
+      padding: 6px 0;
+    }
+
+    .chat-input-row {
+      display: flex;
+      gap: 8px;
+      padding: 12px 16px;
+      border-top: 1px solid #2a2a3a;
+    }
+
+    .chat-input-row input {
+      flex: 1;
+      background: #0f0f13;
+      border: 1px solid #2a2a3a;
+      border-radius: 6px;
+      color: #e0e0e0;
+      font-size: 13px;
+      padding: 8px 12px;
+      outline: none;
+      font-family: inherit;
+    }
+
+    .chat-input-row input:focus { border-color: #5b8dee; }
+
+    .chat-input-row button {
+      background: #5b8dee;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 14px;
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+    }
+
+    .chat-input-row button:hover { opacity: 0.85; }
+    .chat-input-row button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .btn-new-chat {
+      background: none;
+      border: 1px solid #2a2a3a;
+      color: #555;
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .btn-new-chat:hover { color: #ccc; border-color: #444; }
 
     .spinner {
       display: none;
@@ -303,18 +379,24 @@
   <div class="error-banner">⚠️ Ошибка загрузки данных: {{ error }}</div>
   {% endif %}
 
-  {% if stats %}
+  {% if stats or ads %}
   <div class="stats-row">
     {% if group_info.members_count %}
     <div class="stat-card">
       <div class="stat-label">Подписчики</div>
       <div class="stat-value">{{ '{:,}'.format(group_info.members_count).replace(',', ' ') }}</div>
+      {% if member_delta %}
+      <div class="stat-sub" style="color:{% if member_delta.delta >= 0 %}#4caf50{% else %}#f08080{% endif %};">
+        {{ '+' if member_delta.delta >= 0 else '' }}{{ member_delta.delta }} за {{ member_delta.period_days }} дн.
+      </div>
+      {% endif %}
     </div>
     {% endif %}
+    {% if stats %}
     <div class="stat-card">
-      <div class="stat-label">Просмотры ({{ stats.count }} клипов)</div>
+      <div class="stat-label">Просмотры ({{ stats.count }} кл.)</div>
       <div class="stat-value">{{ '{:,}'.format(stats.total_views).replace(',', ' ') }}</div>
-      <div class="stat-sub">ср. {{ '{:,}'.format(stats.avg_views).replace(',', ' ') }} на клип</div>
+      <div class="stat-sub">ср. {{ '{:,}'.format(stats.avg_views).replace(',', ' ') }}/кл.</div>
     </div>
     <div class="stat-card">
       <div class="stat-label">Лайки</div>
@@ -324,29 +406,22 @@
       <div class="stat-label">Репосты</div>
       <div class="stat-value">{{ '{:,}'.format(stats.total_reposts).replace(',', ' ') }}</div>
     </div>
+    {% endif %}
+    {% if ads %}
     <div class="stat-card">
-      <div class="stat-label">Лучший клип</div>
-      <div class="stat-value">{{ '{:,}'.format(stats.best_views).replace(',', ' ') }}</div>
-      <div class="stat-sub">{{ stats.best_title }}</div>
-    </div>
-  </div>
-  {% endif %}
-
-  {% if ads %}
-  <div class="stats-row" style="margin-top:-12px">
-    <div class="stat-card">
-      <div class="stat-label">Показы (7 дней)</div>
+      <div class="stat-label">Показы / 30 дн.</div>
       <div class="stat-value">{{ '{:,}'.format(ads.total_impressions).replace(',', ' ') }}</div>
     </div>
     <div class="stat-card">
-      <div class="stat-label">Клики (7 дней)</div>
+      <div class="stat-label">Клики / 30 дн.</div>
       <div class="stat-value">{{ '{:,}'.format(ads.total_clicks).replace(',', ' ') }}</div>
       <div class="stat-sub">CTR {{ ads.ctr }}%</div>
     </div>
     <div class="stat-card">
-      <div class="stat-label">Расход (7 дней)</div>
+      <div class="stat-label">Расход / 30 дн.</div>
       <div class="stat-value">{{ ads.total_spent }} ₽</div>
     </div>
+    {% endif %}
   </div>
   {% endif %}
 
@@ -356,147 +431,168 @@
     <div class="spinner" id="spinner"></div>
     <span class="status" id="status"></span>
   </div>
-  <div class="toolbar" style="margin-top:-12px;margin-bottom:24px;">
-    <input type="text" id="customQuestion" placeholder="Задать вопрос Claude по статистике…"
-      style="flex:1;background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;padding:10px 14px;color:#e0e0e0;font-size:14px;outline:none;"
-      onkeydown="if(event.key==='Enter')askQuestion()"
-      onfocus="this.style.borderColor='#5b8dee'" onblur="this.style.borderColor='#2a2a3a'">
-    <button class="btn btn-primary" onclick="askQuestion()">Спросить</button>
-  </div>
 
-  <div class="grid">
-    <div class="card">
-      <div class="card-header">Видео · последние {{ videos|length }}</div>
-      <div style="overflow-x:auto;max-height:420px;overflow-y:auto;">
-        <table id="videoTable">
-          <thead>
-            <tr>
-              <th>Название</th>
-              <th>Дата</th>
-              <th>👁 Просмотры</th>
-              <th>❤️ Лайки</th>
-              <th>💬 / 👥</th>
-              <th>↗️ Репосты</th>
-              <th>⏱ Длит.</th>
-              <th>📣 Реклама</th>
-              <th>📝</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for v in videos %}
-            <tr id="row-{{ v.id }}">
-              <td class="video-title" title="{{ v.title }}">
-                <a href="https://vk.com/video{{ v.owner_id }}_{{ v.id }}" target="_blank" style="color:#5b8dee;text-decoration:none;">{{ v.title }}</a>
-              </td>
-              <td class="date">{{ v.date }}</td>
-              <td class="{% if v.views > 1000 %}num-high{% else %}num{% endif %}">{{ '{:,}'.format(v.views).replace(',', ' ') }}</td>
-              <td class="num">{{ v.likes }}</td>
-              {% set cs = comments_stats.get(v.id|string, {}) %}
-              <td class="num" title="{{ cs.get('sample_names', [])|join(', ') }}">
-                {{ v.comments }}
-                {% if cs.get('unique_commenters') %}
-                  <span style="color:#555"> / {{ cs.unique_commenters }} чел.</span>
-                  {% if cs.last_comment %}<div class="date">{{ cs.last_comment }}</div>{% endif %}
-                {% endif %}
-              </td>
-              <td class="num">{{ v.reposts }}</td>
-              <td class="num">{{ (v.duration // 60)|string + ':' + '%02d'|format(v.duration % 60) if v.duration else '—' }}</td>
-              {% set av = ads_per_video.get(v.id|string, {}) %}
-              <td class="num" style="min-width:300px;white-space:nowrap;">
-                {% if av %}
-                <div style="display:flex;gap:14px;flex-wrap:nowrap;margin-bottom:4px;font-size:12px;white-space:nowrap;">
-                  <span>👁 {{ '{:,}'.format(av.impressions).replace(',', ' ') }}</span>
-                  <span>🖱 {{ av.clicks }} ({{ av.ctr }}%)</span>
-                  <span>💰 {{ av.spent }} ₽</span>
-                </div>
-                {% endif %}
-                <select id="camp-{{ v.id }}" onchange="saveMapping('{{ v.id }}', this.value)"
-                  style="background:#0f0f13;border:1px solid #2a2a3a;border-radius:4px;color:#888;font-size:11px;padding:2px 4px;width:100%;">
-                  <option value="">— кампания —</option>
-                </select>
-              </td>
-              <td>
-                <button class="btn-script {% if scripts.get(v.id|string) %}has-script{% endif %}"
-                        id="btn-{{ v.id }}"
-                        onclick="toggleScript('{{ v.id }}', '{{ v.title|replace("'", "\\'") }}')">
-                  📝
-                </button>
-              </td>
-            </tr>
-            <tr class="script-row" id="script-row-{{ v.id }}" style="display:none;">
-              <td colspan="9">
-                <textarea id="script-text-{{ v.id }}" placeholder="Вставьте сценарий или описание видео…">{{ scripts.get(v.id|string, '') }}</textarea>
-                <div class="script-actions">
-                  <button class="btn-save-script" onclick="saveScript('{{ v.id }}')">Сохранить</button>
-                  <button class="btn-cancel-script" onclick="toggleScript('{{ v.id }}')">Отмена</button>
-                </div>
-              </td>
-            </tr>
-            {% else %}
-            <tr><td colspan="9" class="empty">Нет данных</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
+  <div class="card" style="margin-bottom:24px;">
+    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+      <span>✦ Анализ и рекомендации</span>
+      <button class="btn-new-chat" id="btnNewChat" onclick="resetChat()" style="display:none;">↺ Новый чат</button>
+    </div>
+    <div class="chat-container" id="chatContainer">
+      <div class="analysis-placeholder" id="chatPlaceholder">
+        Нажмите «✦ Анализ Claude»<br>или задайте вопрос ниже
       </div>
     </div>
+    <div class="chat-input-row">
+      <input type="text" id="chatInput" placeholder="Задать вопрос Claude…"
+        onkeydown="if(event.key==='Enter')sendChat()">
+      <button id="btnSendChat" onclick="sendChat()" title="Отправить">↑</button>
+    </div>
+  </div>
 
-    <div class="sidebar">
-      <div class="card">
-        <div class="card-header">✦ Анализ и рекомендации</div>
-        <div class="analysis-box" id="analysisBox">
-          <div class="analysis-placeholder" id="analysisPlaceholder">
-            Нажмите «Анализ Claude»<br>чтобы получить рекомендации
-          </div>
-          <div id="analysisTitle" style="display:none;font-size:12px;color:#5b8dee;font-weight:600;margin-bottom:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
-          <div class="analysis-text" id="analysisText" style="display:none"></div>
-        </div>
-      </div>
-
-      {% if history %}
-      <div class="card">
-        <div class="card-header">История анализов</div>
-        <div class="history-list">
-          {% for h in history|reverse %}
-          <div class="history-item" onclick="showHistory(`{{ h.analysis | replace('`', "'") | replace('\n', '\\n') }}`, `{{ (h.get('title') or '') | replace('`', "'") }}`, {{ 'true' if h.get('is_question') else 'false' }})">
-            <div class="history-date">{{ h.date }}{% if h.get('is_question') %} &nbsp;·&nbsp; <span style="color:#5b8dee">вопрос</span>{% endif %}</div>
-            <div class="history-preview">{% if h.get('is_question') %}💬 {% endif %}{{ h.get('title') or h.analysis[:80] }}</div>
-          </div>
+  <div class="card" style="margin-bottom:24px;">
+    <div class="card-header">Видео · последние {{ videos|length }}</div>
+    <div style="overflow-x:auto;">
+      <table id="videoTable">
+        <thead>
+          <tr>
+            <th>Название</th>
+            <th>Дата</th>
+            <th>👁 Просмотры</th>
+            <th>❤️ Лайки</th>
+            <th>💬 / 👥</th>
+            <th>↗️ Репосты</th>
+            <th>⏱ Длит.</th>
+            <th style="width:220px;">📣 Реклама</th>
+            <th style="width:36px;">📝</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for v in videos %}
+          <tr id="row-{{ v.id }}">
+            <td class="video-title" title="{{ v.title }}">
+              <a href="https://vk.com/video{{ v.owner_id }}_{{ v.id }}" target="_blank" style="color:#5b8dee;text-decoration:none;">{{ v.title }}</a>
+            </td>
+            <td class="date">{{ v.date }}</td>
+            <td class="{% if v.views > 1000 %}num-high{% else %}num{% endif %}">{{ '{:,}'.format(v.views).replace(',', ' ') }}</td>
+            <td class="num">{{ v.likes }}</td>
+            {% set cs = comments_stats.get(v.id|string, {}) %}
+            <td class="num" title="{{ cs.get('sample_names', [])|join(', ') }}">
+              {{ v.comments }}
+              {% if cs.get('unique_commenters') %}
+                <span style="color:#555"> / {{ cs.unique_commenters }} чел.</span>
+                {% if cs.last_comment %}<div class="date">{{ cs.last_comment }}</div>{% endif %}
+              {% endif %}
+            </td>
+            <td class="num">{{ v.reposts }}</td>
+            <td class="num">{{ (v.duration // 60)|string + ':' + '%02d'|format(v.duration % 60) if v.duration else '—' }}</td>
+            {% set av = ads_per_video.get(v.id|string, {}) %}
+            <td class="num" style="width:220px;">
+              {% if av %}
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px;font-size:12px;">
+                <span>👁 {{ '{:,}'.format(av.impressions).replace(',', ' ') }}</span>
+                <span>🖱 {{ av.clicks }} ({{ av.ctr }}%)</span>
+                <span>💰 {{ av.spent }} ₽</span>
+              </div>
+              {% endif %}
+              <select id="camp-{{ v.id }}" onchange="saveMapping('{{ v.id }}', this.value)"
+                style="background:#0f0f13;border:1px solid #2a2a3a;border-radius:4px;color:#888;font-size:11px;padding:2px 4px;width:100%;max-width:200px;">
+                <option value="">— кампания —</option>
+              </select>
+            </td>
+            <td>
+              <button class="btn-script {% if scripts.get(v.id|string) %}has-script{% endif %}"
+                      id="btn-{{ v.id }}"
+                      onclick="toggleScript('{{ v.id }}', '{{ v.title|replace("'", "\\'") }}')">
+                📝
+              </button>
+            </td>
+          </tr>
+          <tr class="script-row" id="script-row-{{ v.id }}" style="display:none;">
+            <td colspan="9">
+              <textarea id="script-text-{{ v.id }}" placeholder="Вставьте сценарий или описание видео…">{{ scripts.get(v.id|string, '') }}</textarea>
+              <div class="script-actions">
+                <button class="btn-save-script" onclick="saveScript('{{ v.id }}')">Сохранить</button>
+                <button class="btn-cancel-script" onclick="toggleScript('{{ v.id }}')">Отмена</button>
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="9" class="empty">Нет данных</td></tr>
           {% endfor %}
-        </div>
-      </div>
-      {% endif %}
+        </tbody>
+      </table>
     </div>
   </div>
+
+  {% if history %}
+  <div class="card">
+    <div class="card-header">История анализов</div>
+    <div class="history-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));">
+      {% for h in history|reverse %}
+      <div class="history-item" onclick="showHistory(`{{ h.analysis | replace('`', "'") | replace('\n', '\\n') }}`, `{{ (h.get('title') or '') | replace('`', "'") }}`, {{ 'true' if h.get('is_question') else 'false' }})">
+        <div class="history-date">{{ h.date }}{% if h.get('is_question') %} &nbsp;·&nbsp; <span style="color:#5b8dee">вопрос</span>{% endif %}</div>
+        <div class="history-preview">{% if h.get('is_question') %}💬 {% endif %}{{ h.get('title') or h.analysis[:80] }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
 </div>
 
 <script>
+  let chatMessages = [];
+
   function setLoading(on) {
     document.getElementById('spinner').style.display = on ? 'block' : 'none';
     document.getElementById('btnAnalyze').disabled = on;
     document.getElementById('btnRefresh').disabled = on;
+    document.getElementById('btnSendChat').disabled = on;
   }
 
   function setStatus(msg) {
     document.getElementById('status').textContent = msg;
   }
 
-  function showAnalysis(text, title, isQuestion) {
-    document.getElementById('analysisPlaceholder').style.display = 'none';
-    const titleEl = document.getElementById('analysisTitle');
-    if (title) {
-      titleEl.style.display = 'block';
-      titleEl.textContent = (isQuestion ? '💬 ' : '✦ ') + title;
-    } else {
-      titleEl.style.display = 'none';
-    }
-    const el = document.getElementById('analysisText');
-    el.style.display = 'block';
-    el.textContent = text;
+  function addBubble(role, text) {
+    const container = document.getElementById('chatContainer');
+    const placeholder = document.getElementById('chatPlaceholder');
+    if (placeholder) placeholder.remove();
+
+    const div = document.createElement('div');
+    div.className = 'chat-bubble ' + role;
+    div.textContent = text;
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+    return div;
+  }
+
+  function addThinking() {
+    const container = document.getElementById('chatContainer');
+    const div = document.createElement('div');
+    div.className = 'chat-thinking';
+    div.id = 'chatThinking';
+    div.textContent = 'Claude печатает…';
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+  }
+
+  function removeThinking() {
+    const el = document.getElementById('chatThinking');
+    if (el) el.remove();
+  }
+
+  function resetChat() {
+    chatMessages = [];
+    const container = document.getElementById('chatContainer');
+    container.innerHTML = '<div class="analysis-placeholder" id="chatPlaceholder">Нажмите «✦ Анализ Claude»<br>или задайте вопрос ниже</div>';
+    document.getElementById('btnNewChat').style.display = 'none';
+    document.getElementById('chatInput').value = '';
   }
 
   function showHistory(text, title, isQuestion) {
-    showAnalysis(text.replace(/\\n/g, '\n'), title, isQuestion);
-    document.getElementById('analysisBox').scrollIntoView({ behavior: 'smooth' });
+    resetChat();
+    addBubble('ai', text.replace(/\\n/g, '\n'));
+    document.getElementById('chatContainer').scrollIntoView({ behavior: 'smooth' });
   }
 
   function toggleHelp() {
@@ -566,7 +662,7 @@
 
   async function refreshData() {
     setLoading(true);
-    setStatus('Загружаем данные из ВК и рекламного кабинета…');
+    setStatus('Загружаем данные из ВК…');
     try {
       const r = await fetch('/api/refresh');
       const data = await r.json();
@@ -585,30 +681,42 @@
 
   async function analyzeData(question = '') {
     setLoading(true);
-    setStatus(question ? 'Claude отвечает…' : 'Claude анализирует…');
+
+    if (chatMessages.length > 0 && question) {
+      addBubble('user', question);
+    }
+    addThinking();
+    setStatus(chatMessages.length > 0 ? 'Claude отвечает…' : 'Claude анализирует…');
+
     try {
       const r = await fetch('/api/analyze', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({question})
+        body: JSON.stringify({ question, messages: chatMessages })
       });
       const data = await r.json();
+      removeThinking();
       if (data.ok) {
-        showAnalysis(data.analysis, data.title, data.is_question);
-        setStatus('Готово');
+        chatMessages = data.messages;
+        addBubble('ai', data.analysis);
+        document.getElementById('btnNewChat').style.display = 'inline-block';
+        setStatus('');
       } else {
         setStatus('⚠️ ' + data.error);
       }
     } catch (e) {
+      removeThinking();
       setStatus('Нет связи с сервером — проверьте интернет.');
     } finally {
       setLoading(false);
     }
   }
 
-  function askQuestion() {
-    const q = document.getElementById('customQuestion').value.trim();
-    if (!q) return;
+  function sendChat() {
+    const input = document.getElementById('chatInput');
+    const q = input.value.trim();
+    if (!q || document.getElementById('btnSendChat').disabled) return;
+    input.value = '';
     analyzeData(q);
   }
 </script>

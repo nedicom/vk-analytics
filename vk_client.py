@@ -7,9 +7,15 @@ from datetime import datetime, timedelta
 
 VK_API_VERSION = "5.199"
 
+_session = requests.Session()
+_session.trust_env = False  # не читать прокси из системных настроек/реестра
+_proxy = os.getenv("HTTPS_PROXY") or os.getenv("ALL_PROXY")
+if _proxy:
+    _session.proxies = {"https": _proxy, "http": _proxy}
+
 
 def get_videos(group_id: str, token: str, count: int = 50) -> list[dict]:
-    resp = requests.get("https://api.vk.com/method/wall.get", params={
+    resp = _session.get("https://api.vk.com/method/wall.get", params={
         "owner_id": f"-{group_id}",
         "count": count,
         "filter": "owner",
@@ -45,7 +51,7 @@ def get_videos(group_id: str, token: str, count: int = 50) -> list[dict]:
 
 
 def get_group_info(group_id: str, token: str) -> dict:
-    resp = requests.get("https://api.vk.com/method/groups.getById", params={
+    resp = _session.get("https://api.vk.com/method/groups.getById", params={
         "group_id": group_id,
         "fields": "members_count,activity,description",
         "access_token": token,
@@ -81,11 +87,11 @@ def _delete_ads_tokens(client_id: str, client_secret: str, user_id: str = ""):
     data = {"client_id": client_id, "client_secret": client_secret}
     if user_id:
         data["user_id"] = user_id
-    requests.post("https://target.my.com/api/v2/oauth2/token/delete.json", data=data)
+    _session.post("https://target.my.com/api/v2/oauth2/token/delete.json", data=data)
 
 
 def _fetch_new_ads_token(client_id: str, client_secret: str) -> dict:
-    resp = requests.post("https://target.my.com/api/v2/oauth2/token.json", data={
+    resp = _session.post("https://target.my.com/api/v2/oauth2/token.json", data={
         "grant_type": "client_credentials",
         "client_id": client_id,
         "client_secret": client_secret,
@@ -106,7 +112,7 @@ def get_ads_token(client_id: str, client_secret: str) -> str:
 
     # Если есть refresh_token — обновить через него
     if cached and cached.get("refresh_token"):
-        resp = requests.post("https://target.my.com/api/v2/oauth2/token.json", data={
+        resp = _session.post("https://target.my.com/api/v2/oauth2/token.json", data={
             "grant_type": "refresh_token",
             "refresh_token": cached["refresh_token"],
             "client_id": client_id,
@@ -150,7 +156,7 @@ def get_ads_stats(client_id: str, client_secret: str) -> dict:
 
     headers = {"Authorization": f"Bearer {token}"}
 
-    campaigns_resp = requests.get("https://target.my.com/api/v2/campaigns.json",
+    campaigns_resp = _session.get("https://target.my.com/api/v2/campaigns.json",
                                    headers=headers, params={"limit": 250})
     campaigns_data = campaigns_resp.json()
     campaigns = campaigns_data.get("items", [])
@@ -160,7 +166,7 @@ def get_ads_stats(client_id: str, client_secret: str) -> dict:
     campaign_ids = ",".join(str(c["id"]) for c in campaigns)
     date_to = datetime.now().strftime("%Y-%m-%d")
     date_from = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
-    stats_resp = requests.get(
+    stats_resp = _session.get(
         "https://target.my.com/api/v2/statistics/campaigns/day.json",
         headers=headers,
         params={"id": campaign_ids, "date_from": date_from, "date_to": date_to},
@@ -192,7 +198,7 @@ def get_comments_stats(group_id: str, token: str, videos: list[dict]) -> dict:
         post_id = v.get("post_id")
         if not post_id:
             continue
-        resp = requests.get("https://api.vk.com/method/wall.getComments", params={
+        resp = _session.get("https://api.vk.com/method/wall.getComments", params={
             "owner_id": f"-{group_id}",
             "post_id": post_id,
             "count": 100,
@@ -236,7 +242,7 @@ def get_ads_stats_per_video(client_id: str, client_secret: str, mappings: dict) 
     # Уникальные id из маппингов — пробуем packages, потом campaigns
     ids = list(set(mappings.values()))
     ids_str = ",".join(str(i) for i in ids)
-    stats_resp = requests.get(
+    stats_resp = _session.get(
         "https://target.my.com/api/v2/statistics/ad_plans/day.json",
         headers=headers,
         params={"id": ids_str, "date_from": date_from, "date_to": date_to},
@@ -270,8 +276,101 @@ def get_ads_stats_per_video(client_id: str, client_secret: str, mappings: dict) 
     return video_stats
 
 
+def get_detailed_campaign_stats(client_id: str, client_secret: str, plan_ids: list) -> dict:
+    """Детальная статистика по ad_plan IDs: ежедневные метрики + бюджет + тренды."""
+    if not plan_ids:
+        return {}
+    token = get_ads_token(client_id, client_secret)
+    if not token:
+        return {}
+
+    headers = {"Authorization": f"Bearer {token}"}
+    date_to = datetime.now().strftime("%Y-%m-%d")
+    date_from = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+    ids_str = ",".join(str(i) for i in plan_ids)
+
+    # Метаданные планов (бюджет, статус)
+    plans_meta = {}
+    try:
+        r = _session.get("https://target.my.com/api/v2/ad_plans.json", headers=headers,
+                         params={"limit": 250, "fields": "id,name,status,budget_limit,total_budget,objective"})
+        for p in r.json().get("items", []):
+            if p["id"] in plan_ids:
+                plans_meta[p["id"]] = p
+    except Exception:
+        pass
+
+    # Ежедневная статистика
+    daily_resp = _session.get(
+        "https://target.my.com/api/v2/statistics/ad_plans/day.json",
+        headers=headers,
+        params={"id": ids_str, "date_from": date_from, "date_to": date_to},
+    )
+
+    result = {}
+    for item in daily_resp.json().get("items", []):
+        pid = item.get("id")
+        days = []
+        for row in item.get("rows", []):
+            b = row.get("base", {})
+            if b.get("shows", 0) == 0:
+                continue
+            days.append({
+                "date": row.get("date", ""),
+                "shows": b.get("shows", 0),
+                "clicks": b.get("clicks", 0),
+                "goals": b.get("goals", 0),
+                "spent": round(float(b.get("spent", 0) or 0), 2),
+                "cpm": round(float(b.get("cpm", 0) or 0), 2),
+                "cpc": round(float(b.get("cpc", 0) or 0), 2),
+                "ctr": round(float(b.get("ctr", 0) or 0), 3),
+                "cr": round(float(b.get("cr", 0) or 0), 3),
+            })
+
+        if not days:
+            continue
+
+        total_shows = sum(d["shows"] for d in days)
+        total_clicks = sum(d["clicks"] for d in days)
+        total_spent = round(sum(d["spent"] for d in days), 2)
+        avg_cpm = round(sum(d["cpm"] for d in days) / len(days), 2)
+        avg_cpc = round(sum(d["cpc"] for d in days if d["cpc"]) / max(1, sum(1 for d in days if d["cpc"])), 2)
+        overall_ctr = round(total_clicks / total_shows * 100, 3) if total_shows else 0
+
+        # Тренд CTR: первые 7 дней vs последние 7
+        ctr_start = sum(d["ctr"] for d in days[:7]) / min(7, len(days))
+        ctr_end = sum(d["ctr"] for d in days[-7:]) / min(7, len(days))
+        if ctr_start and ctr_end:
+            ctr_trend = "↗ растёт" if ctr_end > ctr_start * 1.05 else ("↘ снижается" if ctr_end < ctr_start * 0.95 else "→ стабильный")
+        else:
+            ctr_trend = "нет данных"
+
+        meta = plans_meta.get(pid, {})
+        budget_limit = float(meta.get("budget_limit") or 0)
+        total_budget = float(meta.get("total_budget") or 0)
+
+        result[pid] = {
+            "name": meta.get("name", f"План {pid}"),
+            "status": meta.get("status", ""),
+            "budget_limit": round(budget_limit, 2),
+            "total_budget": round(total_budget, 2),
+            "spent": total_spent,
+            "budget_left": round(total_budget - total_spent, 2) if total_budget else None,
+            "total_shows": total_shows,
+            "total_clicks": total_clicks,
+            "total_ctr": overall_ctr,
+            "avg_cpm": avg_cpm,
+            "avg_cpc": avg_cpc,
+            "ctr_trend": ctr_trend,
+            "active_days": len(days),
+            "daily": days,
+        }
+
+    return result
+
+
 def get_group_stats(group_id: str, token: str) -> list[dict]:
-    resp = requests.get("https://api.vk.com/method/stats.get", params={
+    resp = _session.get("https://api.vk.com/method/stats.get", params={
         "group_id": group_id,
         "interval": "month",
         "access_token": token,
